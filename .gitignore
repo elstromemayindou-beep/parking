@@ -1,0 +1,10 @@
+node_modules/
+build/
+dist/
+release/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+public/assets/aistudio/Cahier_des_Charges_Exhaustif_-_AutoGestion_Pro_v3.0_e8552441.pdf

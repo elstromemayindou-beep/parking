@@ -1,0 +1,78 @@
+{
+  "name": "autogestion-pro",
+  "private": true,
+  "version": "1.0.2",
+  "description": "Application de gestion pour établissements automobiles",
+  "author": "AutoGestion Pro",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "desktop:dev": "concurrently -k \"vite --port=3000 --host=127.0.0.1\" \"wait-on http://127.0.0.1:3000 && electron .\"",
+    "build": "vite build",
+    "desktop:pack": "npm run build && electron-builder --dir",
+    "desktop:dist": "npm run build && electron-builder --win nsis",
+    "desktop:release": "npm run build && electron-builder --config electron-builder.release.cjs --win nsis --publish always",
+    "preview": "vite preview",
+    "clean": "rm -rf dist server.js",
+    "lint": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "com.autogestionpro.desktop",
+    "productName": "AutoGestion Pro",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/main.cjs",
+      "electron/preload.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/autogestion-pro-logo.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AutoGestion Pro",
+      "installerIcon": "public/autogestion-pro-logo.ico",
+      "uninstallerIcon": "public/autogestion-pro-logo.ico"
+    }
+  },
+  "devDependencies": {
+    "@google/genai": "^2.4.0",
+    "@supabase/supabase-js": "^2.57.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "react-is": "^19.0.0",
+    "recharts": "^3.10.1",
+    "vite": "^8.3.0",
+    "concurrently": "^9.2.1",
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.21.0",
+    "typescript": "^7.0.2",
+    "@types/express": "^4.17.21",
+    "wait-on": "^8.0.4"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
+}

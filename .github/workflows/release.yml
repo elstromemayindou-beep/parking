@@ -46,10 +46,81 @@ jobs:
       - name: Installer les dépendances
         run: npm install --no-audit --no-fund
 
-      - name: Construire et publier l’installateur
-        run: npm run desktop:release
+      - name: Construire l’installateur sans créer de release concurrente
+        run: npm run desktop:release:build
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: Préparer les noms des fichiers de mise à jour
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          $installer = Join-Path 'release' "N.O.B BUSINESS Setup $version.exe"
+          $blockmap = "$installer.blockmap"
+          $updateManifest = Join-Path 'release' 'latest.yml'
+          foreach ($file in @($installer, $blockmap, $updateManifest)) {
+            if (-not (Test-Path -LiteralPath $file)) {
+              throw "Fichier de release manquant : $file"
+            }
+          }
+          $normalizedInstaller = Join-Path 'release' "N.O.B-BUSINESS-Setup-$version.exe"
+          Copy-Item -LiteralPath $installer -Destination $normalizedInstaller -Force
+          Copy-Item -LiteralPath $blockmap -Destination "$normalizedInstaller.blockmap" -Force
+          $manifest = Get-Content -LiteralPath $updateManifest -Raw
+          if ($manifest -notmatch [regex]::Escape((Split-Path -Leaf $normalizedInstaller))) {
+            throw "Le manifeste latest.yml ne référence pas l’installateur publié."
+          }
+
+      - name: Créer une release unique avec tous les fichiers
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          gh release create $env:GITHUB_REF_NAME `
+            'release/latest.yml' `
+            "release/N.O.B-BUSINESS-Setup-$version.exe" `
+            "release/N.O.B-BUSINESS-Setup-$version.exe.blockmap" `
+            --title "N.O.B BUSINESS $env:GITHUB_REF_NAME" `
+            --notes "N.O.B BUSINESS version $version." `
+            --verify-tag `
+            --latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Nettoyer le doublon incomplet de la release v1.0.3
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $releases = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases?per_page=100" `
+            -Headers $headers
+          $legacyReleases = @($releases | Where-Object { $_.tag_name -eq 'v1.0.3' })
+          $completeReleases = @($legacyReleases | Where-Object {
+            $names = @($_.assets | ForEach-Object { $_.name })
+            $names -contains 'latest.yml' -and
+              ($names | Where-Object { $_ -match '^N\.O\.B-BUSINESS-Setup-1\.0\.3\.exe$' })
+          })
+          if ($legacyReleases.Count -gt 1 -and $completeReleases.Count -eq 1) {
+            foreach ($release in $legacyReleases) {
+              if ($release.id -eq $completeReleases[0].id) {
+                continue
+              }
+              $hasInstallerOrManifest = @($release.assets | Where-Object {
+                $_.name -eq 'latest.yml' -or $_.name -match '\.exe$'
+              }).Count -gt 0
+              if ($hasInstallerOrManifest) {
+                throw "Refus de supprimer une release v1.0.3 contenant un installateur ou un manifeste."
+              }
+              Invoke-RestMethod `
+                -Method Delete `
+                -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/$($release.id)" `
+                -Headers $headers
+            }
+          }

@@ -1,7 +1,7 @@
 {
   "name": "autogestion-pro",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "N.O.B BUSINESS — gestion du parking, lavage, salon, garage et caisse",
   "author": "N.O.B BUSINESS",
   "type": "module",
@@ -12,7 +12,7 @@
     "build": "vite build",
     "desktop:pack": "npm run build && electron-builder --dir",
     "desktop:dist": "npm run build && electron-builder --win nsis",
-    "desktop:release": "npm run build && electron-builder --config electron-builder.release.cjs --win nsis --publish always",
+    "desktop:release:build": "npm run build && electron-builder --config electron-builder.release.cjs --win nsis --publish never",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"

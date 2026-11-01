@@ -69,7 +69,7 @@ Le workflow `.github/workflows/release.yml` construit l’installateur Windows e
 1. Envoyez le projet vers un dépôt GitHub public et assurez-vous que les Actions peuvent créer des releases (`contents: write` est déjà déclaré dans le workflow).
 2. Dans **Settings → Secrets and variables → Actions → Variables**, ajoutez `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY`, avec les mêmes valeurs publiques que dans `.env.local`. Ne configurez jamais une clé `service_role`.
 3. Incrémentez `version` dans `package.json`.
-4. Créez et poussez le tag correspondant, par exemple `v1.0.3` si `package.json` indique `1.0.3` : `git tag v1.0.3`, puis `git push origin v1.0.3`.
+4. Créez et poussez le tag correspondant, par exemple `v1.0.4` si `package.json` indique `1.0.4` : `git tag v1.0.4`, puis `git push origin v1.0.4`.
 5. Vérifiez la fin du workflow dans l’onglet **Actions** du dépôt. La release contient l’installateur et le manifeste utilisés par l’application.
 
 Les versions installées avec l’ancien setup **1.0.0** ne contiennent pas le module de mise à jour ; les versions ultérieures le recherchent au démarrage. Après publication d’une release GitHub valide, l’application télécharge la nouvelle version et propose de redémarrer pour l’installer. Une modification locale n’est pas publiée automatiquement : elle doit d’abord être incluse dans une release GitHub. Les postes doivent avoir accès à Internet et le dépôt doit rester public pour permettre le téléchargement sans secret embarqué.

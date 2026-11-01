@@ -17,7 +17,8 @@ import {
   ReceiptText,
   TrendingDown,
   Users2,
-  Wrench
+  Wrench,
+  Scissors
 } from 'lucide-react';
 import { CaisseRevenueChart } from './CaisseRevenueChart';
 import { StockCriticalAlertsWidget } from './StockCriticalAlertsWidget';
@@ -25,12 +26,14 @@ import { StockCriticalAlertsWidget } from './StockCriticalAlertsWidget';
 export const DashboardHub: React.FC = () => {
   const {
     setActiveModule,
+    setDepartementActif,
     currentSuccursale,
     placesParking,
     ticketsParking,
     lavages,
     garageOrs,
     sessionCaisse,
+    encaissements,
     employes,
     piecesStock,
     depenses,
@@ -51,16 +54,35 @@ export const DashboardHub: React.FC = () => {
   const activeEmployees = employes.filter(employee => employee.statut === 'ACTIF');
   const presentEmployees = activeEmployees.filter(employee => employee.present_aujourdhui).length;
   const pendingAlerts = alertesFraude.filter(alert => alert.statut === 'A_VERIFIER').length;
+  const encaissementsGlobaux = encaissements.filter(payment => payment.succursale_id === currentSuccursale.id);
+  const recettesGlobales = encaissementsGlobaux.reduce((total, payment) => total + payment.montant, 0);
+  const recettesGlobalesParMode = {
+    ESPECES: encaissementsGlobaux.filter(payment => payment.mode_paiement === 'ESPECES').reduce((total, payment) => total + payment.montant, 0),
+    MTN_MOMO: encaissementsGlobaux.filter(payment => payment.mode_paiement === 'MTN_MOMO').reduce((total, payment) => total + payment.montant, 0),
+    AIRTEL_MONEY: encaissementsGlobaux.filter(payment => payment.mode_paiement === 'AIRTEL_MONEY').reduce((total, payment) => total + payment.montant, 0),
+    VIREMENT: encaissementsGlobaux.filter(payment => payment.mode_paiement === 'VIREMENT').reduce((total, payment) => total + payment.montant, 0)
+  };
+  const depensesGlobalesValidees = depenses
+    .filter(expense => expense.succursale_id === currentSuccursale.id &&
+      expense.valide_par_gerant &&
+      (!expense.accord_proprietaire_requis || expense.valide_par_proprietaire))
+    .reduce((total, expense) => total + expense.montant, 0);
+  const soldeGlobalTheorique = recettesGlobales - depensesGlobalesValidees;
+  const openGlobalModule = (module: ActiveModule) => {
+    setDepartementActif('GLOBAL');
+    setActiveModule(module);
+  };
   const todayInvoices = factures.filter(invoice => invoice.created_at.slice(0, 10) === sessionCaisse.date);
 
   const modules: { id: ActiveModule; title: string; description: string; count: string; icon: React.ElementType; tone: string }[] = [
     { id: 'PARKING', title: 'Parking', description: 'Places et tickets actifs', count: `${activeParking} ticket(s)`, icon: ParkingSquare, tone: 'sky' },
     { id: 'LAVAGE', title: 'Lavage', description: 'File de véhicules', count: `${activeWash} en cours`, icon: Sparkles, tone: 'cyan' },
+    { id: 'SALON', title: 'Salon de coiffure', description: 'Prestations et commissions', count: 'Recettes et stock salon', icon: Scissors, tone: 'indigo' },
     { id: 'GARAGE', title: 'Garage', description: 'Ordres de réparation', count: `${activeRepairs} ordre(s) actif(s)`, icon: Wrench, tone: 'violet' },
-    { id: 'CAISSE', title: 'Caisse', description: 'Encaissements et clôture', count: formatCurrency(sessionCaisse.solde_net_theorique), icon: CircleDollarSign, tone: 'emerald' },
+    { id: 'CAISSE', title: 'Caisse', description: 'Encaissements cumulés et clôture', count: formatCurrency(recettesGlobales), icon: CircleDollarSign, tone: 'emerald' },
     { id: 'EMPLOYES', title: 'Équipe', description: 'Présences du jour', count: `${presentEmployees}/${activeEmployees.length} présent(s)`, icon: Users2, tone: 'indigo' },
     { id: 'STOCKS', title: 'Stocks', description: 'Inventaire et alertes', count: `${criticalStock} sous le seuil`, icon: Boxes, tone: 'amber' },
-    { id: 'DEPENSES', title: 'Dépenses', description: 'Sorties et validations', count: formatCurrency(sessionCaisse.depenses_validees), icon: TrendingDown, tone: 'rose' },
+    { id: 'DEPENSES', title: 'Dépenses', description: 'Sorties et validations', count: formatCurrency(depensesGlobalesValidees), icon: TrendingDown, tone: 'rose' },
     { id: 'DETTES', title: 'Créances clients', description: 'Factures à recouvrer', count: formatCurrency(receivables), icon: HandCoins, tone: 'orange' },
     { id: 'DEMANDES', title: 'Réservations', description: 'Demandes à traiter', count: `${pendingRequests} en attente`, icon: Inbox, tone: 'teal' },
     { id: 'RAPPORTS', title: 'Rapports', description: 'Activité et journal', count: `${pendingAlerts} alerte(s) à vérifier`, icon: LineChart, tone: 'slate' },
@@ -74,16 +96,16 @@ export const DashboardHub: React.FC = () => {
     <div className="mx-auto max-w-[1440px] space-y-8 p-4 sm:p-6 lg:space-y-10 lg:p-9">
       <header className="animate-rise-in flex flex-col justify-between gap-4 lg:flex-row lg:items-end lg:gap-5">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-100/80 bg-white/75 px-3 py-1.5 text-xs font-semibold text-blue-800 shadow-sm backdrop-blur">
+          <div className="dashboard-eyebrow inline-flex items-center gap-2 rounded-full border border-blue-100/80 bg-white/75 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.15em] text-blue-800 shadow-sm backdrop-blur">
             <Building2 className="h-3.5 w-3.5" />
-            {currentSuccursale.nom}{currentSuccursale.ville && ` · ${currentSuccursale.ville}`}
+            Espace de pilotage <span className="text-blue-300">/</span> {currentSuccursale.nom}{currentSuccursale.ville && ` · ${currentSuccursale.ville}`}
           </div>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl lg:text-[2.65rem]">Bonjour, voici votre activité</h1>
+          <h1 className="mt-4 text-3xl font-black tracking-[-0.04em] text-slate-950 sm:text-4xl lg:text-[2.85rem]">Bonjour, voici votre activité</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Votre poste de pilotage pour suivre les opérations et la caisse de la journée.
+            Votre poste de pilotage pour suivre les opérations, les équipes et la santé financière de N.O.B BUSINESS.
           </p>
         </div>
-        <div className="flex w-fit items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3.5 py-2.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur lg:self-auto">
+        <div className="dashboard-session flex w-fit items-center gap-2.5 rounded-2xl border border-white/80 bg-white/65 px-4 py-3 text-xs font-medium text-slate-600 shadow-sm backdrop-blur lg:self-auto">
           <span className={`h-2 w-2 rounded-full ${sessionCaisse.statut === 'OUVERTE' ? 'bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]' : 'bg-slate-400'}`} />
           Session de caisse {sessionCaisse.statut === 'OUVERTE' ? 'ouverte' : 'clôturée'}
           <span className="mx-1 h-4 w-px bg-slate-200" />
@@ -99,27 +121,28 @@ export const DashboardHub: React.FC = () => {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-800">
-                <CircleDollarSign className="h-4 w-4" /> Résumé de caisse
+                <CircleDollarSign className="h-4 w-4" /> Chiffre d’affaires global encaissé
               </p>
-              <p className="mt-3 text-4xl font-extrabold tracking-tight text-slate-950 sm:text-5xl lg:text-[3.5rem]">{formatCurrency(sessionCaisse.solde_net_theorique)}</p>
+              <p className="mt-3 text-4xl font-extrabold tracking-tight text-slate-950 sm:text-5xl lg:text-[3.5rem]">{formatCurrency(recettesGlobales)}</p>
               <p className="mt-2 text-sm text-slate-600">
-                Solde net théorique de la session
+                Total encaissé depuis le début, remboursements déduits
                 <span className="mx-2 text-slate-400">·</span>
-                Recettes {formatCurrency(sessionCaisse.recettes_especes_theorique + sessionCaisse.recettes_momo_theorique + sessionCaisse.recettes_airtel_theorique)}
+                Dépenses validées {formatCurrency(depensesGlobalesValidees)}
                 <span className="mx-2 text-slate-400">−</span>
-                Dépenses {formatCurrency(sessionCaisse.depenses_validees)}
+                Solde net global {formatCurrency(soldeGlobalTheorique)}
               </p>
             </div>
-            <button onClick={() => setActiveModule('CAISSE')} className="button-primary inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white">
+            <button onClick={() => openGlobalModule('CAISSE')} className="button-primary inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white">
               <CircleDollarSign className="h-4 w-4" />
               Accéder à la caisse
               <ArrowUpRight className="h-4 w-4 opacity-80" />
             </button>
           </div>
-          <div className="mt-7 grid grid-cols-2 gap-2 border-t border-blue-200/70 pt-5 sm:grid-cols-4 sm:gap-3">
-            <CashMetric label="Espèces" value={sessionCaisse.recettes_especes_theorique} formatCurrency={formatCurrency} />
-            <CashMetric label="MTN MoMo" value={sessionCaisse.recettes_momo_theorique} formatCurrency={formatCurrency} />
-            <CashMetric label="Airtel Money" value={sessionCaisse.recettes_airtel_theorique} formatCurrency={formatCurrency} />
+          <div className="mt-7 grid grid-cols-2 gap-2 border-t border-blue-200/70 pt-5 sm:grid-cols-5 sm:gap-3">
+            <CashMetric label="Espèces cumulées" value={recettesGlobalesParMode.ESPECES} formatCurrency={formatCurrency} />
+            <CashMetric label="MTN MoMo cumulé" value={recettesGlobalesParMode.MTN_MOMO} formatCurrency={formatCurrency} />
+            <CashMetric label="Airtel Money cumulé" value={recettesGlobalesParMode.AIRTEL_MONEY} formatCurrency={formatCurrency} />
+            <CashMetric label="Virements cumulés" value={recettesGlobalesParMode.VIREMENT} formatCurrency={formatCurrency} />
             <div className="cash-metric">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Statut</p>
               <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-bold text-slate-900">
@@ -141,9 +164,9 @@ export const DashboardHub: React.FC = () => {
           </div>
           <div className="mt-4 space-y-1">
             <FollowUp label="Demandes en attente" value={pendingRequests} onClick={() => setActiveModule('DEMANDES')} />
-            <FollowUp label="Articles sous le seuil" value={criticalStock} onClick={() => setActiveModule('STOCKS')} />
-            <FollowUp label="Alertes à vérifier" value={pendingAlerts} onClick={() => setActiveModule('RAPPORTS')} />
-            <FollowUp label="Employés présents" value={`${presentEmployees} / ${activeEmployees.length}`} onClick={() => setActiveModule('EMPLOYES')} />
+            <FollowUp label="Articles sous le seuil" value={criticalStock} onClick={() => openGlobalModule('STOCKS')} />
+            <FollowUp label="Alertes à vérifier" value={pendingAlerts} onClick={() => openGlobalModule('RAPPORTS')} />
+            <FollowUp label="Employés présents" value={`${presentEmployees} / ${activeEmployees.length}`} onClick={() => openGlobalModule('EMPLOYES')} />
           </div>
         </div>
       </section>
@@ -162,7 +185,16 @@ export const DashboardHub: React.FC = () => {
             return (
               <button
                 key={module.id}
-                onClick={() => setActiveModule(module.id)}
+                onClick={() => {
+                  const scopes: Partial<Record<ActiveModule, 'LAVAGE' | 'SALON' | 'MECANIQUE' | 'PARKING'>> = {
+                    LAVAGE: 'LAVAGE',
+                    SALON: 'SALON',
+                    GARAGE: 'MECANIQUE',
+                    PARKING: 'PARKING'
+                  };
+                  setDepartementActif(scopes[module.id] || 'GLOBAL');
+                  setActiveModule(module.id);
+                }}
                 className={`glass-panel glass-button dashboard-card group rounded-2xl border border-white/80 bg-white p-4 text-left tone-${module.tone}`}
               >
                 <div className="flex items-center justify-between">

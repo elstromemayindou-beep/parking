@@ -1,9 +1,9 @@
 {
   "name": "autogestion-pro",
   "private": true,
-  "version": "1.0.2",
-  "description": "Application de gestion pour établissements automobiles",
-  "author": "AutoGestion Pro",
+  "version": "1.0.3",
+  "description": "N.O.B BUSINESS — gestion du parking, lavage, salon, garage et caisse",
+  "author": "N.O.B BUSINESS",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -19,7 +19,7 @@
   },
   "build": {
     "appId": "com.autogestionpro.desktop",
-    "productName": "AutoGestion Pro",
+    "productName": "N.O.B BUSINESS",
     "asar": true,
     "directories": {
       "output": "release"
@@ -39,7 +39,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "AutoGestion Pro",
+      "shortcutName": "N.O.B BUSINESS",
       "installerIcon": "public/autogestion-pro-logo.ico",
       "uninstallerIcon": "public/autogestion-pro-logo.ico"
     }
@@ -65,7 +65,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.2",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",

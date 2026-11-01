@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Desktop Executive Header
+ * N.O.B BUSINESS - Desktop executive header
  * Displays Electron-like window bar, branch switcher, RBAC role switcher, Edge/Offline status, and audit triggers
  */
 
@@ -59,20 +59,19 @@ export const DesktopHeader: React.FC<DesktopHeaderProps> = ({
 
   return (
     <header className="app-header sticky top-0 z-40 select-none border-b border-slate-200 text-slate-900">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-7">
+      <div className="mx-auto flex max-w-[1680px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3 lg:px-7">
         <div className="flex min-w-0 items-center gap-3">
           <button
             onClick={() => setActiveModule('HUB')}
             aria-label="Retour au tableau de bord"
             className="nav-brand flex items-center gap-3 rounded-xl text-left"
           >
-            <img src="./autogestion-pro-logo.svg" alt="" className="h-11 w-11 shrink-0 rounded-2xl shadow-lg shadow-blue-600/20" />
+            <img src="./autogestion-pro-logo.svg" alt="" className="h-12 w-12 shrink-0 rounded-2xl shadow-lg shadow-blue-600/20" />
             <span className="min-w-0">
               <span className="flex items-center gap-2">
-                <span className="truncate text-base font-extrabold tracking-tight text-slate-950">AutoGestion<span className="text-blue-700">Pro</span></span>
-                <span className="rounded-md border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-800">Gérant</span>
+                <span className="truncate text-[15px] font-black tracking-tight text-slate-950">N.O.B <span className="text-blue-700">BUSINESS</span></span>
               </span>
-              <span className="mt-0.5 block text-[11px] font-medium text-slate-500">Pilotage de l’établissement</span>
+              <span className="mt-0.5 block text-[11px] font-medium tracking-wide text-slate-500">GESTION · PILOTAGE · PERFORMANCE</span>
             </span>
           </button>
           {activeModule !== 'HUB' && (
@@ -104,13 +103,14 @@ export const DesktopHeader: React.FC<DesktopHeaderProps> = ({
           </select>
           </label>
 
-          <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold ${
+          <span className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-bold shadow-sm ${
             databaseStatus === 'connected'
               ? 'border-emerald-200 bg-emerald-50/90 text-emerald-800'
               : databaseStatus === 'error'
                 ? 'border-rose-200 bg-rose-50/90 text-rose-800'
                 : 'border-slate-200 bg-white/80 text-slate-600'
           }`}>
+            <span className={`h-2 w-2 rounded-full ${databaseStatus === 'connected' ? 'bg-emerald-500' : databaseStatus === 'error' ? 'bg-rose-500' : 'animate-pulse bg-slate-400'}`} />
             <Wifi className="h-3.5 w-3.5" />
             {databaseStatus === 'connected' ? 'Base connectée' : databaseStatus === 'error' ? 'Erreur de connexion' : 'Connexion en cours'}
           </span>

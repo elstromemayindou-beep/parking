@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Global Application Context
+ * N.O.B BUSINESS - Global Application Context
  * Implements Edge Offline-first resilience, RBAC permissions, and real-time state updates
  */
 
@@ -26,6 +26,7 @@ import {
   LogAudit,
   AlerteFraude,
   ActiveModule,
+  DepartementActivite,
   PaymentMethod,
   EtapeKanban,
   EtapeLavageDomicile,
@@ -34,7 +35,8 @@ import {
   TarifsServices,
   CapacitesParking,
   ZoneParking,
-  MouvementStock
+  MouvementStock,
+  ConfigurationEntreprise
 } from '../types';
 
 let lastGeneratedOperationId = 0;
@@ -45,6 +47,8 @@ const nextOperationId = () => {
 };
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { normaliserTarifsServices, TARIFS_SERVICES_PAR_DEFAUT } from '../utils/tarifs';
+import { normaliserConfigurationEntreprise } from '../utils/configurationEntreprise';
+import { determinerPeriodeTravail } from '../utils/configurationEntreprise';
 import { calculerMontantParking, tarifParkingTicket } from '../utils/parkingPricing';
 
 export type AuthStatus = 'loading' | 'unconfigured' | 'signed_out' | 'needs_branch' | 'ready' | 'error';
@@ -74,12 +78,16 @@ interface AppContextType {
   // Navigation & Environment
   activeModule: ActiveModule;
   setActiveModule: (module: ActiveModule) => void;
+  departementActif: DepartementActivite | 'GLOBAL';
+  setDepartementActif: (departement: DepartementActivite | 'GLOBAL') => void;
   userRole: UserRole;
   authUserId: string | null;
   gerantProfile: GerantProfileData | null;
   saveGerantProfile: (profile: GerantProfileData) => void;
   tarifsServices: TarifsServices;
   updateTarifsServices: (tarifs: TarifsServices) => void;
+  configurationEntreprise: ConfigurationEntreprise;
+  updateConfigurationEntreprise: (configuration: ConfigurationEntreprise) => boolean;
   currentSuccursale: Succursale;
   setCurrentSuccursale: (succursale: Succursale) => void;
   succursales: Succursale[];
@@ -110,7 +118,7 @@ interface AppContextType {
   // Parking Actions
   initialiserPlacesParking: (capacites: CapacitesParking) => boolean;
   modifierPlacesParking: (capacites: CapacitesParking) => boolean;
-  creerTicketParking: (plaque: string, zone: ZoneParking, typeClient: 'HORAIRE' | 'ABONNE_VIP' | 'CLIENT_GARAGE', scanSource: 'CAMERA_OCR' | 'MANUEL', marqueModele?: string, typeVehicule?: 'VOITURE' | 'MOTO') => TicketParking | null;
+  creerTicketParking: (plaque: string, zone: ZoneParking, typeClient: 'HORAIRE' | 'ABONNE_VIP' | 'CLIENT_GARAGE', scanSource: 'CAMERA_OCR' | 'MANUEL', marqueModele?: string, typeVehicule?: 'VOITURE' | 'MOTO', serviceGardiennage?: boolean) => TicketParking | null;
   cloturerTicketParking: (ticketId: number, modePaiement: PaymentMethod) => void;
   arreterTicketParking: (ticketId: number, motif: string, modePaiement?: PaymentMethod) => boolean;
 
@@ -119,12 +127,15 @@ interface AppContextType {
     plaque: string,
     clientNom: string,
     telephone: string,
-    formule: 'SIMPLE' | 'COMPLET' | 'VIP_DETAILING',
+    formule: 'SIMPLE' | 'COMPLET' | 'VIP_DETAILING' | 'PERSONNALISE',
     laveurId?: number,
     desc?: string,
     domicile?: { adresse: string; date: string; heure: string; instructions: string },
     laveurIds?: number[],
-    typeVehicule?: 'VOITURE' | 'MOTO'
+    typeVehicule?: 'VOITURE' | 'MOTO',
+    servicesSelectionnes?: LavageItem['services_selectionnes'],
+    prixFinal?: number,
+    categorieVehicule?: string
   ) => void;
   affecterLaveursLavage: (lavageId: number, laveurIds: number[]) => void;
   annulerLavage: (lavageId: number, motif: string) => boolean;
@@ -133,6 +144,11 @@ interface AppContextType {
     update: { laveur_id?: number; etape_domicile?: EtapeLavageDomicile; kit_prepare?: string[] }
   ) => void;
   changerStatutLavage: (lavageId: number, nouveauStatut: 'EN_ATTENTE' | 'EN_COURS' | 'TERMINE' | 'LIVRE_PAYE') => void;
+  enregistrerRecetteJournaliereSalon: (
+    date: string,
+    montants: Record<PaymentMethod, number>,
+    employeId: number
+  ) => Facture | null;
   terminerLavage: (lavageId: number, consommations: { piece_id: number; quantite: number }[], prestations: string[]) => boolean;
   signalerProduitLavage: (laveurId: number, pieceId: number) => void;
   traiterDemandeConsommableLavage: (demandeId: number, decision: 'REMIS' | 'REFUSEE') => void;
@@ -144,14 +160,16 @@ interface AppContextType {
 
   // Caisse & Facturation Actions
   encaisserFacture: (factureId: number, montantVerse: number, modePaiement: PaymentMethod, refPaiement: string) => void;
-  creerFactureDirecte: (facture: Omit<Facture, 'id' | 'numero' | 'created_at'>) => Facture;
+  creerFactureDirecte: (
+    facture: Omit<Facture, 'id' | 'numero' | 'created_at'>,
+    ventilationPaiements?: { montant: number; mode_paiement: PaymentMethod }[]
+  ) => Facture;
   annulerFacture: (factureId: number, motif: string) => boolean;
   effectuerClotureAveugle: (comptageEspeces: number, comptageMoMo: number, comptageAirtel: number, motifEcart?: string) => { ecart: number; session: SessionCaisse } | null;
 
   // Dépenses Actions
-  ajouterDepense: (motif: string, montant: number, categorie: Depense['categorie'], justificatif?: string) => void;
+  ajouterDepense: (motif: string, montant: number, categorie: Depense['categorie'], justificatif?: string, departement?: DepartementActivite | 'GLOBAL', employeId?: number) => void;
   validerDepenseGerant: (depenseId: number) => void;
-  validerDepenseProprietaire: (depenseId: number) => void;
 
   // RH Actions
   pointerEmploye: (employeId: number, type?: 'IN' | 'OUT') => void;
@@ -159,6 +177,7 @@ interface AppContextType {
   ajouterPrimeAmende: (employeId: number, type: 'PRIME' | 'AMENDE', montant: number, motif: string, preuve?: string) => void;
   changerStatutEmploye: (employeId: number, statut: 'ACTIF' | 'SUSPENDU') => void;
   radierEmploye: (employeId: number, motif: string) => boolean;
+  enregistrerPaiementEmploye: (employeId: number, montant: number, type: NonNullable<Depense['type_paie']>) => boolean;
 
   // Stocks Actions
   ajouterStockPiece: (piece: Omit<PieceStock, 'id'>) => void;
@@ -185,6 +204,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeModule, setActiveModule] = useState<ActiveModule>('HUB');
+  const [departementActif, setDepartementActif] = useState<DepartementActivite | 'GLOBAL'>('GLOBAL');
   const [authStatus, setAuthStatus] = useState<AuthStatus>(isSupabaseConfigured ? 'loading' : 'unconfigured');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -192,6 +212,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [databaseStatus, setDatabaseStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [userRole, setUserRole] = useState<UserRole>('GERANT');
   const [tarifsServices, setTarifsServices] = useState<TarifsServices>({ ...TARIFS_SERVICES_PAR_DEFAUT });
+  const [configurationEntreprise, setConfigurationEntreprise] = useState<ConfigurationEntreprise>(
+    () => normaliserConfigurationEntreprise(undefined)
+  );
   const [profilsGerants, setProfilsGerants] = useState<ProfilGerant[]>([]);
   const [succursales, setSuccursales] = useState<Succursale[]>([]);
   const [currentSuccursale, setCurrentSuccursaleState] = useState<Succursale>({
@@ -420,6 +443,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLogsAudit(asArray<LogAudit>('logs_audit'));
       setAlertesFraude(asArray<AlerteFraude>('alertes_fraude'));
       setTarifsServices(normaliserTarifsServices(values.get('tarifs_services')));
+      const savedConfiguration = normaliserConfigurationEntreprise(values.get('configuration_entreprise'));
+      setConfigurationEntreprise(savedConfiguration);
+      setCurrentSuccursaleState(previous => previous.id === branchId
+        ? { ...previous, nom: savedConfiguration.nom, adresse: savedConfiguration.adresse }
+        : previous);
+      setSuccursales(previous => previous.map(branch => branch.id === branchId
+        ? { ...branch, nom: savedConfiguration.nom, adresse: savedConfiguration.adresse }
+        : branch));
       setProfilsGerants(asArray<ProfilGerant>('profils_gerants'));
       const currentDate = new Date().toISOString().slice(0, 10);
       const savedSession = values.get('session_caisse') as SessionCaisse | undefined;
@@ -463,6 +494,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logs_audit: logsAudit,
     alertes_fraude: alertesFraude,
     tarifs_services: tarifsServices,
+    configuration_entreprise: configurationEntreprise,
     profils_gerants: profilsGerants
   };
 
@@ -515,6 +547,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logsAudit,
     alertesFraude,
     tarifsServices,
+    configurationEntreprise,
     profilsGerants
   ]);
 
@@ -575,6 +608,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTarifsServices(tarifs);
     addAuditLog('MODIFICATION_TARIFS', 'Tarifs des services', 'Les tarifs de lavage, parking et main-d’œuvre ont été mis à jour.');
     showNotification('Les nouveaux tarifs sont enregistrés pour cette succursale.');
+  };
+
+  const updateConfigurationEntreprise = (configuration: ConfigurationEntreprise): boolean => {
+    if (userRole !== 'GERANT' && userRole !== 'PROPRIETAIRE') {
+      showNotification('Seuls le gérant et le propriétaire peuvent modifier les paramètres de l’établissement.', 'warning');
+      return false;
+    }
+
+    const categories = configuration.categoriesVehicules.map(category => category.trim()).filter(Boolean);
+    const categoriesUniques = new Set(categories.map(category => category.toLocaleLowerCase()));
+    if (!configuration.nom.trim() || !configuration.adresse.trim() ||
+      categories.length === 0 || categoriesUniques.size !== categories.length ||
+      !Number.isFinite(configuration.tarifGardiennageNuit) || configuration.tarifGardiennageNuit < 0) {
+      showNotification('Renseignez le nom, l’adresse et des catégories de véhicules uniques.', 'warning');
+      return false;
+    }
+    if (configuration.servicesLavage.some(service =>
+      !service.id.trim() || !service.nom.trim() ||
+      categories.some(category => !Number.isFinite(service.prix_par_categorie[category]) || service.prix_par_categorie[category] < 0)
+    )) {
+      showNotification('Chaque prestation doit avoir un nom et un tarif valide par catégorie de véhicule.', 'warning');
+      return false;
+    }
+    const names = configuration.servicesLavage.map(service => service.nom.trim().toLocaleLowerCase());
+    if (new Set(names).size !== names.length) {
+      showNotification('Chaque prestation de lavage doit avoir un nom unique.', 'warning');
+      return false;
+    }
+    const normalized = normaliserConfigurationEntreprise({
+      ...configuration,
+      categoriesVehicules: categories
+    });
+    setConfigurationEntreprise(normalized);
+    setCurrentSuccursaleState(previous => ({
+      ...previous,
+      nom: normalized.nom,
+      adresse: normalized.adresse
+    }));
+    setSuccursales(previous => previous.map(branch => branch.id === currentSuccursale.id
+      ? { ...branch, nom: normalized.nom, adresse: normalized.adresse }
+      : branch));
+    addAuditLog(
+      'MODIFICATION_CONFIGURATION_ENTREPRISE',
+      normalized.nom,
+      `Coordonnées, horaires, gardiennage de nuit et catalogues de lavage/salon mis à jour.`
+    );
+    showNotification('Les informations et catalogues de N.O.B BUSINESS sont enregistrés.');
+    return true;
   };
 
   const saveGerantProfile = (profile: GerantProfileData) => {
@@ -691,7 +772,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     montant: number,
     modePaiement: PaymentMethod,
     referencePaiement: string,
-    motif?: string
+    motif?: string,
+    departement?: Facture['departement'],
+    periodeTravail?: Facture['periode_travail']
   ) => {
     const newPayment: Encaissement = {
       id: nextOperationId(),
@@ -701,7 +784,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mode_paiement: modePaiement,
       reference_paiement: referencePaiement,
       created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      motif
+      motif,
+      departement,
+      periode_travail: periodeTravail
     };
     setEncaissements(prev => [newPayment, ...prev]);
   };
@@ -726,7 +811,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       motif,
       responsable: userRole === 'PROPRIETAIRE' ? 'Propriétaire' : 'Gérant',
       reference_operation: referenceOperation,
-      created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
+      created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      departement: piece.departement || (
+        piece.categorie === 'Salon & Coiffure' ? 'SALON'
+          : piece.categorie === 'Consommables Lavage' ? 'LAVAGE'
+            : 'MECANIQUE'
+      )
     }, ...prev]);
   };
 
@@ -757,7 +847,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           -payment.montant,
           payment.mode_paiement,
           `ANNULATION-${facture.numero}-${payment.id}`,
-          motif.trim()
+          motif.trim(),
+          facture.departement,
+          facture.periode_travail
         ));
       } else if (facture.mode_paiement) {
         addEncaissement(
@@ -765,7 +857,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           -Math.min(totalEncaisse, facture.montant_paye),
           facture.mode_paiement,
           `ANNULATION-${facture.numero}`,
-          motif.trim()
+          motif.trim(),
+          facture.departement,
+          facture.periode_travail
         );
       }
     }
@@ -776,6 +870,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       annulation_motif: motif.trim(),
       annulee_le: dateAnnulation
     } : item));
+    setPrimesAmendes(prev => prev.map(item => item.facture_id === factureId ? { ...item, annulee: true } : item));
 
     const lavage = lavages.find(item => item.facture_id === factureId || item.id === facture.source_lavage_id);
     if (lavage && lavage.statut !== 'ANNULE') {
@@ -943,9 +1038,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     typeClient: 'HORAIRE' | 'ABONNE_VIP' | 'CLIENT_GARAGE',
     scanSource: 'CAMERA_OCR' | 'MANUEL',
     marqueModele: string = 'Véhicule standard',
-    typeVehicule: 'VOITURE' | 'MOTO' = 'VOITURE'
+    typeVehicule: 'VOITURE' | 'MOTO' = 'VOITURE',
+    serviceGardiennage = false
   ): TicketParking | null => {
     // Find available place in zone
+    const now = new Date();
+    const periodeTravail = determinerPeriodeTravail(now, configurationEntreprise);
     const dispoPlace = placesParking.find(p => p.zone === zone && p.statut === 'LIBRE');
     if (ticketsParking.some(ticket => ticket.plaque === plaque.toUpperCase().trim() && ticket.statut === 'ACTIF')) {
       showNotification(`Un ticket actif existe déjà pour ${plaque.toUpperCase().trim()}.`, 'warning');
@@ -953,6 +1051,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (!dispoPlace) {
       showNotification(`Aucune place libre disponible en zone ${zone}`, 'warning');
+      return null;
+    }
+    if (serviceGardiennage && (periodeTravail !== 'NUIT' || configurationEntreprise.tarifGardiennageNuit <= 0)) {
+      showNotification('Le gardiennage doit être configuré avec un tarif positif et ne peut être ajouté que pendant le service de nuit.', 'warning');
       return null;
     }
 
@@ -966,13 +1068,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type_vehicule: typeVehicule,
       client_id: vehicules.find(vehicle => vehicle.plaque.toUpperCase().trim() === plaque.toUpperCase().trim())?.client_id,
       place_numero: placeNum,
-      heure_entree: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      heure_entree: now.toISOString().replace('T', ' ').slice(0, 16),
       type_client: typeClient,
       statut: 'ACTIF',
       scan_source: scanSource,
-      montant_estime: typeClient === 'ABONNE_VIP' || typeClient === 'CLIENT_GARAGE' ? 0 : tarifsServices.parkingPremiereHeure,
+      montant_estime: (typeClient === 'ABONNE_VIP' || typeClient === 'CLIENT_GARAGE' ? 0 : tarifsServices.parkingPremiereHeure) +
+        (serviceGardiennage ? configurationEntreprise.tarifGardiennageNuit : 0),
       tarif_premiere_heure: tarifsServices.parkingPremiereHeure,
-      tarif_quart_heure_supplementaire: tarifsServices.parkingQuartHeureSupplementaire
+      tarif_quart_heure_supplementaire: tarifsServices.parkingQuartHeureSupplementaire,
+      departement: 'PARKING',
+      periode_travail: periodeTravail,
+      service_gardiennage: serviceGardiennage,
+      montant_gardiennage: serviceGardiennage ? configurationEntreprise.tarifGardiennageNuit : 0
     };
 
     setTicketsParking(prev => [newTicket, ...prev]);
@@ -1009,6 +1116,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         tarif.quartHeureSupplementaire
       );
     }
+    montant += ticket.montant_gardiennage || 0;
 
     const heureSortie = new Date().toISOString().replace('T', ' ').slice(0, 16);
 
@@ -1033,17 +1141,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         client_id: ticket.client_id || 1,
         succursale_id: currentSuccursale.id,
         type_service: 'PARKING',
-        description: `Stationnement véhicule ${ticket.plaque} (${diffMinutes} min, Place ${ticket.place_numero})`,
+        description: `${ticket.service_gardiennage ? 'Stationnement et gardiennage' : 'Stationnement'} véhicule ${ticket.plaque} (${diffMinutes} min, Place ${ticket.place_numero})`,
         montant_total: montant,
         montant_paye: montant,
         statut: 'PAYE',
         mode_paiement: modePaiement,
         reference_paiement: referencePaiement,
         created_at: heureSortie,
-        source_ticket_parking_id: ticket.id
+        source_ticket_parking_id: ticket.id,
+        departement: 'PARKING',
+        periode_travail: ticket.periode_travail,
+        lignes: [
+          ...(ticket.type_client === 'HORAIRE' ? [{ description: 'Stationnement', quantite: 1, prix_unitaire: montant - (ticket.montant_gardiennage || 0), total: montant - (ticket.montant_gardiennage || 0) }] : []),
+          ...(ticket.service_gardiennage && ticket.montant_gardiennage ? [{ description: 'Gardiennage de nuit', quantite: 1, prix_unitaire: ticket.montant_gardiennage, total: ticket.montant_gardiennage }] : [])
+        ]
       };
       setFactures(prev => [newFacture, ...prev]);
-      addEncaissement(factureId, montant, modePaiement, referencePaiement);
+      addEncaissement(factureId, montant, modePaiement, referencePaiement, undefined, 'PARKING', ticket.periode_travail);
     }
 
     addAuditLog('SORTIE_PARKING', `Ticket ${ticket.code_ticket}`, `Sortie de ${ticket.plaque}. Montant perçu: ${formatCurrency(montant)} (${modePaiement})`);
@@ -1115,19 +1229,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     plaque: string,
     clientNom: string,
     telephone: string,
-    formule: 'SIMPLE' | 'COMPLET' | 'VIP_DETAILING',
+    formule: 'SIMPLE' | 'COMPLET' | 'VIP_DETAILING' | 'PERSONNALISE',
     laveurId?: number,
     desc: string = 'Véhicule standard',
     domicile?: { adresse: string; date: string; heure: string; instructions: string },
     laveurIds?: number[],
-    typeVehicule: 'VOITURE' | 'MOTO' = 'VOITURE'
+    typeVehicule: 'VOITURE' | 'MOTO' = 'VOITURE',
+    servicesSelectionnes?: LavageItem['services_selectionnes'],
+    prixFinal?: number,
+    categorieVehicule?: string
   ) => {
     const tarifs = {
       SIMPLE: tarifsServices.lavageSimple,
       COMPLET: tarifsServices.lavageComplet,
       VIP_DETAILING: tarifsServices.lavageVipDetailing
     };
-    const prix = tarifs[formule];
+    const formuleLegacy = formule === 'PERSONNALISE' ? 'COMPLET' : formule;
+    const prixCatalogue = servicesSelectionnes?.length
+      ? servicesSelectionnes.reduce((total, service) => total + service.montant, 0)
+      : tarifs[formuleLegacy];
+    if (servicesSelectionnes?.length && (
+      servicesSelectionnes.some(service => !Number.isFinite(service.montant) || service.montant <= 0) ||
+      !Number.isFinite(prixFinal) || (prixFinal || 0) < 1000
+    )) {
+      showNotification('Les services doivent avoir un tarif défini et le total négocié doit être au moins de 1 000 FCFA.', 'warning');
+      return;
+    }
+    const prix = servicesSelectionnes?.length ? prixFinal! : prixCatalogue;
     const shampConso = formule === 'VIP_DETAILING' ? 250 : formule === 'COMPLET' ? 180 : 100;
     const cireConso = formule === 'VIP_DETAILING' ? 80 : formule === 'COMPLET' ? 30 : 0;
 
@@ -1181,7 +1309,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       heure_rendez_vous: domicile?.heure,
       instructions_client: domicile?.instructions,
       etape_domicile: domicile ? 'PLANIFIEE' : undefined,
-      kit_prepare: domicile ? [] : undefined
+      kit_prepare: domicile ? [] : undefined,
+      departement: 'LAVAGE',
+      periode_travail: determinerPeriodeTravail(now, configurationEntreprise),
+      services_selectionnes: servicesSelectionnes,
+      remise_montant: servicesSelectionnes?.length ? Math.max(0, prixCatalogue - prix) : undefined,
+      categorie_vehicule: categorieVehicule
     };
 
     setLavages(prev => [newLavage, ...prev]);
@@ -1286,21 +1419,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         client_id: item.client_id || 1,
         succursale_id: currentSuccursale.id,
         type_service: 'LAVAGE',
-        description: `Prestation lavage ${item.formule} (${item.plaque})`,
+        description: `Lavage ${item.services_selectionnes?.map(service => service.nom).join(' + ') || item.formule} (${item.plaque})`,
         montant_total: item.prix,
         montant_paye: item.prix,
         statut: 'PAYE',
         mode_paiement: 'ESPECES',
         reference_paiement: `ESP-LAV-${Date.now().toString().slice(-4)}`,
         created_at: new Date().toISOString().replace('T', ' ').slice(0, 16),
-        source_lavage_id: item.id
+        source_lavage_id: item.id,
+        departement: 'LAVAGE',
+        periode_travail: item.periode_travail,
+        lignes: item.services_selectionnes?.length
+          ? [
+              ...item.services_selectionnes.map(service => ({
+                description: service.nom,
+                quantite: 1,
+                prix_unitaire: service.montant,
+                total: service.montant
+              })),
+              ...(item.prix - item.services_selectionnes.reduce((sum, service) => sum + service.montant, 0) !== 0
+                ? [{
+                    description: 'Ajustement du prix convenu',
+                    quantite: 1,
+                    prix_unitaire: item.prix - item.services_selectionnes.reduce((sum, service) => sum + service.montant, 0),
+                    total: item.prix - item.services_selectionnes.reduce((sum, service) => sum + service.montant, 0)
+                  }]
+                : [])
+            ]
+          : undefined
       };
       setFactures(prev => [newFacture, ...prev]);
       addEncaissement(
         newFacture.id,
         item.prix,
         'ESPECES',
-        newFacture.reference_paiement || ''
+        newFacture.reference_paiement || '',
+        undefined,
+        newFacture.departement,
+        newFacture.periode_travail
       );
       setLavages(prev => prev.map(lavage => lavage.id === item.id ? { ...lavage, facture_id: newFacture.id } : lavage));
 
@@ -1536,6 +1692,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         montant_paye: 0,
         statut: 'IMPAYE',
         created_at: new Date().toISOString().replace('T', ' ').slice(0, 16),
+        departement: 'MECANIQUE',
+        periode_travail: determinerPeriodeTravail(new Date(), configurationEntreprise),
         lignes: [
           ...orItem.pieces_demandees.map(p => ({
             description: `${p.nom} (Réf: ${p.ref})`,
@@ -1647,40 +1805,135 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mode_paiement: modePaiement,
       reference_paiement: refPaiement
     } : f));
-    addEncaissement(factureId, montantVerse, modePaiement, refPaiement);
+    addEncaissement(factureId, montantVerse, modePaiement, refPaiement, undefined, facture.departement, facture.periode_travail);
 
     addAuditLog('ENCAISSEMENT', facture.numero, `Règlement de ${formatCurrency(montantVerse)} via ${modePaiement} (Réf: ${refPaiement}). Reste dû: ${formatCurrency(Math.max(0, facture.montant_total - nouveauMontantPaye))}`);
     showNotification(`Encaissement de ${formatCurrency(montantVerse)} enregistré (${modePaiement})`);
   };
 
-  const creerFactureDirecte = (factureData: Omit<Facture, 'id' | 'numero' | 'created_at'>): Facture => {
-    if (factureData.montant_paye > 0 && !factureData.mode_paiement) {
+  const creerFactureDirecte = (
+    factureData: Omit<Facture, 'id' | 'numero' | 'created_at'>,
+    ventilationPaiements?: { montant: number; mode_paiement: PaymentMethod }[]
+  ): Facture => {
+    const totalVentile = ventilationPaiements?.reduce((sum, payment) => sum + payment.montant, 0);
+    if (ventilationPaiements && (
+      ventilationPaiements.some(payment => !Number.isInteger(payment.montant) || payment.montant <= 0) ||
+      totalVentile !== factureData.montant_paye
+    )) {
+      throw new Error('La ventilation des paiements doit correspondre au montant encaissé de la facture.');
+    }
+    if (!ventilationPaiements && factureData.montant_paye > 0 && !factureData.mode_paiement) {
       throw new Error('Un mode de paiement est obligatoire pour un encaissement.');
     }
     const id = Date.now();
     const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 16);
     const newFacture: Facture = {
       ...factureData,
+      departement: factureData.departement || (
+        factureData.type_service === 'LAVAGE' ? 'LAVAGE'
+          : factureData.type_service === 'SALON' ? 'SALON'
+            : factureData.type_service === 'PARKING' ? 'PARKING'
+              : 'MECANIQUE'
+      ),
+      periode_travail: factureData.periode_travail || determinerPeriodeTravail(new Date(), configurationEntreprise),
       id,
       numero: `FACT-${id}`,
       created_at: createdAt
     };
     const modePaiement = newFacture.montant_paye > 0 ? newFacture.mode_paiement : undefined;
-    if (newFacture.montant_paye > 0 && !modePaiement) {
+    if (!ventilationPaiements && newFacture.montant_paye > 0 && !modePaiement) {
       throw new Error('Un mode de paiement est obligatoire pour un encaissement.');
     }
 
     setFactures(prev => [newFacture, ...prev]);
-    if (newFacture.montant_paye > 0 && modePaiement) {
+    if (ventilationPaiements) {
+      ventilationPaiements.forEach((payment, index) => addEncaissement(
+        newFacture.id,
+        payment.montant,
+        payment.mode_paiement,
+        `SALON-${newFacture.salon_date_recette}-${index + 1}`,
+        undefined,
+        newFacture.departement,
+        newFacture.periode_travail
+      ));
+    } else if (newFacture.montant_paye > 0 && modePaiement) {
       addEncaissement(
         newFacture.id,
         newFacture.montant_paye,
         modePaiement,
-        newFacture.reference_paiement || `FACT-${newFacture.id}`
+        newFacture.reference_paiement || `FACT-${newFacture.id}`,
+        undefined,
+        newFacture.departement,
+        newFacture.periode_travail
       );
     }
     addAuditLog('CREATION_FACTURE', newFacture.numero, `Création facture ${newFacture.description} - ${formatCurrency(newFacture.montant_total)}`);
     return newFacture;
+  };
+
+  const enregistrerRecetteJournaliereSalon = (
+    date: string,
+    montants: Record<PaymentMethod, number>,
+    employeId: number
+  ): Facture | null => {
+    const employee = employes.find(item => item.id === employeId && item.poste === 'Coiffeur' && item.statut === 'ACTIF');
+    if (!employee) {
+      showNotification('Sélectionnez un coiffeur actif pour enregistrer la recette journalière.', 'warning');
+      return null;
+    }
+    const paymentMethods: PaymentMethod[] = ['ESPECES', 'MTN_MOMO', 'AIRTEL_MONEY', 'VIREMENT'];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || paymentMethods.some(method =>
+      !Number.isInteger(montants[method]) || montants[method] < 0
+    )) {
+      showNotification('Vérifiez la date et les montants de la recette journalière.', 'warning');
+      return null;
+    }
+    const montant = paymentMethods.reduce((sum, method) => sum + montants[method], 0);
+    if (montant <= 0) {
+      showNotification('Saisissez au moins un montant encaissé pour la journée.', 'warning');
+      return null;
+    }
+    if (factures.some(invoice => invoice.type_service === 'SALON' &&
+      (invoice.salon_date_recette === date || invoice.created_at.slice(0, 10) === date) &&
+      invoice.statut !== 'ANNULEE'
+    )) {
+      showNotification('Une recette du salon est déjà enregistrée pour cette journée. Annulez la transaction avec son motif avant de saisir le récapitulatif.', 'warning');
+      return null;
+    }
+    const ventilationPaiements = paymentMethods
+      .filter(method => montants[method] > 0)
+      .map(method => ({ mode_paiement: method, montant: montants[method] }));
+    const now = new Date();
+    const periode = determinerPeriodeTravail(now, configurationEntreprise);
+    const facture = creerFactureDirecte({
+      succursale_id: currentSuccursale.id,
+      type_service: 'SALON',
+      description: `Recette journalière du salon · ${date} · ${employee.nom_complet}`,
+      montant_total: montant,
+      montant_paye: montant,
+      statut: 'PAYE',
+      departement: 'SALON',
+      periode_travail: periode,
+      salon_date_recette: date,
+      lignes: [{ description: 'Recette journalière salon', quantite: 1, prix_unitaire: montant, total: montant }]
+    }, ventilationPaiements);
+
+    const commission = Math.round(montant * 0.4);
+    const prime: PrimeAmende = {
+      id: nextOperationId(),
+      employe_id: employee.id,
+      type_acte: 'PRIME',
+      montant: commission,
+      motif: `Commission salon 40 % sur la recette du ${date}`,
+      date_enregistrement: now.toISOString().replace('T', ' ').slice(0, 19),
+      enregistre_par: 'Système Salon',
+      departement: 'SALON',
+      periode_travail: periode,
+      facture_id: facture.id
+    };
+    setPrimesAmendes(previous => [prime, ...previous]);
+    addAuditLog('COMMISSION_SALON', employee.nom_complet, `Commission de 40 % (${formatCurrency(commission)}) enregistrée sur la recette journalière encaissée de ${formatCurrency(montant)}.`);
+    return facture;
   };
 
   // RF-47: Procédure de clôture de caisse quotidienne avec comptage à l'aveugle et détection d'écarts
@@ -1742,8 +1995,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Dépenses Methods
-  const ajouterDepense = (motif: string, montant: number, categorie: Depense['categorie'], justificatif?: string) => {
-    const accordProprietaireRequis = montant > 50000;
+  const ajouterDepense = (
+    motif: string,
+    montant: number,
+    categorie: Depense['categorie'],
+    justificatif?: string,
+    departement: DepartementActivite | 'GLOBAL' = 'GLOBAL',
+    employeId?: number
+  ) => {
+    const valideeParGerant = userRole === 'GERANT';
     const newDepense: Depense = {
       id: Date.now(),
       succursale_id: currentSuccursale.id,
@@ -1751,27 +2011,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       montant,
       categorie,
       justificatif_url: justificatif,
-      valide_par_gerant: true,
-      accord_proprietaire_requis: accordProprietaireRequis,
-      valide_par_proprietaire: !accordProprietaireRequis, // if < 50k, auto validated
+      valide_par_gerant: valideeParGerant,
+      accord_proprietaire_requis: false,
+      valide_par_proprietaire: true,
       auteur: userRole === 'PROPRIETAIRE' ? 'Propriétaire' : userRole === 'GERANT' ? 'Gérant' : 'Caissier',
-      created_at: new Date().toISOString().replace('T', ' ').slice(0, 16)
+      created_at: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      departement: departement === 'GLOBAL' ? undefined : departement,
+      periode_travail: determinerPeriodeTravail(new Date(), configurationEntreprise),
+      employe_id: employeId
     };
 
     setDepenses(prev => [newDepense, ...prev]);
-    addAuditLog('SAISIE_DEPENSE', `Dépense #${newDepense.id}`, `Saisie dépense: ${motif} (${formatCurrency(montant)}). Accord propriétaire requis: ${accordProprietaireRequis ? 'OUI (> 50k)' : 'NON'}`);
-    showNotification(`Dépense de ${formatCurrency(montant)} enregistrée`);
+    addAuditLog('SAISIE_DEPENSE', `Dépense #${newDepense.id}`, `Saisie dépense: ${motif} (${formatCurrency(montant)}). Validation gérant : ${valideeParGerant ? 'accordée' : 'en attente'}.`);
+    showNotification(valideeParGerant
+      ? `Dépense de ${formatCurrency(montant)} enregistrée et validée.`
+      : `Dépense de ${formatCurrency(montant)} enregistrée en attente de validation du gérant.`,
+    valideeParGerant ? 'success' : 'info');
   };
 
   const validerDepenseGerant = (depenseId: number) => {
+    if (userRole !== 'GERANT') {
+      showNotification('Seul le gérant peut autoriser un décaissement.', 'warning');
+      return;
+    }
+    const depense = depenses.find(item => item.id === depenseId);
+    if (!depense || depense.valide_par_gerant) return;
     setDepenses(prev => prev.map(d => d.id === depenseId ? { ...d, valide_par_gerant: true } : d));
-    addAuditLog('VALIDATION_DEPENSE_GERANT', `Dépense #${depenseId}`, 'Validation gérant accordée');
-  };
-
-  const validerDepenseProprietaire = (depenseId: number) => {
-    setDepenses(prev => prev.map(d => d.id === depenseId ? { ...d, valide_par_proprietaire: true } : d));
-    addAuditLog('ACCORD_DEPENSE_PROPRIETAIRE', `Dépense #${depenseId}`, 'Accord de la Direction Propriétaire validé');
-    showNotification('Dépense validée par la Direction');
+    addAuditLog('VALIDATION_DEPENSE_GERANT', `Dépense #${depenseId}`, `Décaissement autorisé par le gérant : ${depense.motif} (${formatCurrency(depense.montant)}).`);
+    showNotification('Décaissement autorisé par le gérant.');
   };
 
   // RH Methods
@@ -1890,6 +2157,107 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
+  const enregistrerPaiementEmploye = (
+    employeId: number,
+    montant: number,
+    type: NonNullable<Depense['type_paie']>
+  ): boolean => {
+    if (userRole !== 'GERANT') {
+      showNotification('Seul le gérant peut autoriser et enregistrer un paiement de salaire.', 'warning');
+      return false;
+    }
+    const employee = employes.find(item => item.id === employeId && item.statut !== 'RADIE');
+    if (!employee || !Number.isFinite(montant) || montant <= 0) {
+      showNotification('Employé ou montant de paiement invalide.', 'warning');
+      return false;
+    }
+    const now = new Date();
+    if (employee.rythme_paie === 'AVANCE_25_FIN_MOIS') {
+      if (type !== 'AVANCE_25' && type !== 'SOLDE') {
+        showNotification('Ce salarié suit le rythme avance de 25 %, puis solde de fin de mois.', 'warning');
+        return false;
+      }
+      if (type === 'AVANCE_25' && now.getDate() > 15) {
+        showNotification('L’avance de 25 % doit être enregistrée dans la première moitié du mois.', 'warning');
+        return false;
+      }
+      if (type === 'SOLDE' && now.getDate() < 16) {
+        showNotification('Le solde est à enregistrer en fin de mois, à partir du 16.', 'warning');
+        return false;
+      }
+    } else {
+      if (type !== 'PREMIERE_QUINZAINE' && type !== 'SECONDE_QUINZAINE') {
+        showNotification('Ce salarié est payé les 1er et 15 ; choisissez la quinzaine correspondante.', 'warning');
+        return false;
+      }
+      if (type === 'PREMIERE_QUINZAINE' && now.getDate() > 15) {
+        showNotification('La première paie du mois doit être enregistrée au plus tard le 15.', 'warning');
+        return false;
+      }
+      if (type === 'SECONDE_QUINZAINE' && now.getDate() < 16) {
+        showNotification('La seconde paie du mois est à enregistrer à partir du 16.', 'warning');
+        return false;
+      }
+    }
+    const period = now.toISOString().slice(0, 7);
+    const monthActs = primesAmendes.filter(act =>
+      act.employe_id === employeId && !act.annulee && act.date_enregistrement.slice(0, 7) === period
+    );
+    const payrollTotal = Math.max(0,
+      employee.salaire_base +
+      monthActs.filter(act => act.type_acte === 'PRIME').reduce((sum, act) => sum + act.montant, 0) -
+      monthActs.filter(act => act.type_acte === 'AMENDE').reduce((sum, act) => sum + act.montant, 0)
+    );
+    const monthPayments = depenses.filter(expense =>
+      expense.employe_id === employeId &&
+      expense.categorie === 'Salaires & commissions' &&
+      (expense.periode_paie || expense.created_at.slice(0, 7)) === period
+    );
+    const alreadyPaid = monthPayments.reduce((sum, payment) => sum + payment.montant, 0);
+    const remaining = Math.max(0, payrollTotal - alreadyPaid);
+    if (montant > remaining) {
+      showNotification(`Le paiement dépasse le solde de paie restant (${formatCurrency(remaining)}).`, 'warning');
+      return false;
+    }
+    if (type === 'AVANCE_25') {
+      const advanceLimit = Math.round(payrollTotal * 0.25);
+      const priorAdvance = monthPayments.filter(payment => payment.type_paie === 'AVANCE_25')
+        .reduce((sum, payment) => sum + payment.montant, 0);
+      if (montant > Math.max(0, advanceLimit - priorAdvance)) {
+        showNotification(`L’avance ne peut pas dépasser 25 % de la paie mensuelle (${formatCurrency(Math.max(0, advanceLimit - priorAdvance))} disponible).`, 'warning');
+        return false;
+      }
+    }
+    const department = employee.departement || (
+      employee.poste === 'Coiffeur' ? 'SALON'
+        : employee.poste === 'Laveur' ? 'LAVAGE'
+          : employee.poste === 'Agent Parking' || employee.poste === 'Gardien' ? 'PARKING'
+            : employee.poste === 'Mécanicien' || employee.poste === "Chef d'Atelier" ? 'MECANIQUE'
+              : undefined
+    );
+    const expense: Depense = {
+      id: nextOperationId(),
+      succursale_id: currentSuccursale.id,
+      motif: `Paie ${period} · ${type} · ${employee.nom_complet}`,
+      montant,
+      categorie: 'Salaires & commissions',
+      valide_par_gerant: true,
+      accord_proprietaire_requis: false,
+      valide_par_proprietaire: true,
+      auteur: 'Gérant',
+      created_at: now.toISOString().replace('T', ' ').slice(0, 19),
+      departement: department,
+      periode_travail: determinerPeriodeTravail(now, configurationEntreprise),
+      employe_id: employee.id,
+      type_paie: type,
+      periode_paie: period
+    };
+    setDepenses(previous => [expense, ...previous]);
+    addAuditLog('PAIEMENT_SALAIRE', employee.nom_complet, `Paiement ${type} de ${formatCurrency(montant)} enregistré pour ${period}. Reste à payer : ${formatCurrency(remaining - montant)}.`);
+    showNotification(`Paiement de ${formatCurrency(montant)} enregistré pour ${employee.nom_complet}.`);
+    return true;
+  };
+
   // Stocks Methods
   const ajouterStockPiece = (pieceData: Omit<PieceStock, 'id'>) => {
     if (userRole !== 'GERANT' && userRole !== 'PROPRIETAIRE') {
@@ -1904,6 +2272,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const newPiece: PieceStock = {
       ...pieceData,
+      departement: pieceData.departement || (
+        pieceData.categorie === 'Salon & Coiffure' ? 'SALON'
+          : pieceData.categorie === 'Consommables Lavage' ? 'LAVAGE'
+            : 'MECANIQUE'
+      ),
       id: Date.now()
     };
     setPiecesStock(prev => [newPiece, ...prev]);
@@ -2022,7 +2395,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mode_paiement: mode,
       reference_paiement: reference
     } : f));
-    addEncaissement(factureId, montant, mode, reference);
+    addEncaissement(factureId, montant, mode, reference, undefined, facture.departement, facture.periode_travail);
 
     addAuditLog('VERSEMENT_DETTE_CLIENT', facture.numero, `Versement échelonné de ${formatCurrency(montant)} par client #${facture.client_id}. Reste: ${formatCurrency(Math.max(0, facture.montant_total - nouveauPaye))}`);
     showNotification(`Acompte de ${formatCurrency(montant)} enregistré avec succès`);
@@ -2077,12 +2450,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         databaseStatus,
         activeModule,
         setActiveModule,
+        departementActif,
+        setDepartementActif,
         userRole,
         authUserId,
         gerantProfile,
         saveGerantProfile,
         tarifsServices,
         updateTarifsServices,
+        configurationEntreprise,
+        updateConfigurationEntreprise,
         currentSuccursale,
         setCurrentSuccursale,
         succursales,
@@ -2120,6 +2497,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         annulerLavage,
         mettreAJourLavageDomicile,
         changerStatutLavage,
+        enregistrerRecetteJournaliereSalon,
         terminerLavage,
         signalerProduitLavage,
         traiterDemandeConsommableLavage,
@@ -2135,13 +2513,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         ajouterDepense,
         validerDepenseGerant,
-        validerDepenseProprietaire,
 
         pointerEmploye,
         ajouterEmploye,
         ajouterPrimeAmende,
         changerStatutEmploye,
         radierEmploye,
+        enregistrerPaiementEmploye,
 
         ajouterStockPiece,
         commanderStock,

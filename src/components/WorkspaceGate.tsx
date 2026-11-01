@@ -147,7 +147,7 @@ const GateFrame: React.FC<{ children: React.ReactNode }> = ({ children }) => (
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.35rem] bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 text-white shadow-xl shadow-blue-700/25 lg:mx-0">
           <Car className="h-8 w-8" />
         </div>
-        <p className="mt-6 text-xs font-bold uppercase tracking-[0.24em] text-blue-800">AutoGestion Pro · Espace gérant</p>
+        <p className="mt-6 text-xs font-bold uppercase tracking-[0.24em] text-blue-800">N.O.B BUSINESS · Espace gérant</p>
         <h1 className="mt-3 text-4xl font-extrabold leading-[1.08] tracking-tight text-slate-950 sm:text-5xl">
           Votre établissement,<br />
           <span className="bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600 bg-clip-text text-transparent">enfin sous contrôle.</span>

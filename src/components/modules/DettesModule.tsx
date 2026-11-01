@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Module 8: Dettes & Crédits Clients
+ * N.O.B BUSINESS - Module 8: Dettes & Crédits Clients
  * Requirements:
  * - RF-63 : Suivi des factures impayées, échéanciers et saisie des versements échelonnés
  * - Blocage automatique des prestations si le client dépasse son découvert autorisé

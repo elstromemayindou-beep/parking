@@ -1,4 +1,4 @@
-# AutoGestion Pro
+# N.O.B BUSINESS
 
 Application web de gestion d’un établissement automobile. Le poste du gérant centralise le parking, le lavage, le garage, la caisse, les dépenses, les dettes, les stocks, l’équipe et les rapports.
 
@@ -27,7 +27,17 @@ Pour les interventions à domicile, les boutons de contact ouvrent le téléphon
 
 Dans **Équipe**, **Ajouter un employé** permet de saisir une fiche RH détaillée : coordonnées, adresse, date de naissance, pièce d’identité, poste, contrat, date d’embauche, salaire, qualifications, notes et contact d’urgence. Les champs privés doivent être renseignés uniquement selon les besoins et les obligations applicables.
 
-Le module **Tarifs et profil** permet au gérant de modifier les formules de lavage, le tarif du parking et le forfait de main-d’œuvre par défaut du garage. Ces réglages sont enregistrés par établissement dans `branch_data`. Le profil du gérant est rattaché à son identifiant Supabase et synchronisé avec une fiche **Gérant** dans l’équipe ; les montants déjà enregistrés sur les prestations et devis ne sont pas recalculés.
+Dans **Paramètres → N.O.B et catalogue lavage**, le gérant peut renseigner l’identité de N.O.B BUSINESS, son adresse, le WhatsApp du PDG et les horaires jour/nuit. Il peut aussi gérer les catégories de véhicules et le catalogue des prestations de lavage, avec un prix par catégorie. Dans **Lavage**, plusieurs prestations peuvent être choisies pour un même véhicule ; le total convenu peut être ajusté, sans descendre sous 1 000 FCFA. Le ticket conserve les prestations et les tarifs appliqués au moment de la création. Ces réglages sont enregistrés par établissement dans `branch_data`. Le module **Tarifs et profil** conserve également le tarif du parking et le forfait de main-d’œuvre par défaut du garage. Le profil du gérant est rattaché à son identifiant Supabase et synchronisé avec une fiche **Gérant** dans l’équipe ; les montants déjà enregistrés sur les prestations et devis ne sont pas recalculés.
+
+Les espaces **Parking**, **Lavage**, **Salon** et **Garage** proposent une navigation interne vers la caisse, les dépenses, le personnel, les stocks et les rapports limités à l’activité choisie. Le nom de l’espace et de la page active reste affiché dans l’en-tête ; pour changer d’activité, revenez au tableau de bord et ouvrez son espace. Depuis le tableau de bord, les modules communs (**Caisse**, **Stocks**, **Personnel**, **Dépenses**, **Rapports**) s’ouvrent en vue globale, sans sélecteur de département sur ces pages. La clôture physique reste globale, même quand la caisse d’une activité est affichée. Les opérations récentes sont étiquetées automatiquement, tandis que les anciens stocks et factures sont classés à partir de leur catégorie ou de leur type de service quand c’est possible.
+
+Le **Salon** n’enregistre pas les clients ni chaque prestation individuellement. À la fin de la journée, le gérant saisit une seule recette journalière, ventilée par moyen de paiement, et choisit le coiffeur auquel attribuer la commission de 40 %. Le total crée une entrée unique dans la caisse globale et la commission correspondante dans la paie. Une seule recette active peut être enregistrée par jour ; pour la corriger, annulez-la avec un motif dans la caisse, puis saisissez le récapitulatif corrigé. Le stock salon est géré dans Stocks avec le filtre **Salon**.
+
+Au **Parking**, pendant le service de nuit configuré, le gérant peut ajouter un forfait de gardiennage au ticket. Un lavage demandé en plus reste une prestation distincte : créez également le ticket dans **Lavage** ; les deux encaissements sont consolidés dans la caisse globale et gardent leurs activités respectives.
+
+Les fiches RH permettent de rattacher chaque employé à un département (dont le poste **Gardien**, affecté au parking) et de choisir un rythme de paie : les 1er et 15 (montants saisis selon le paiement réellement remis), ou une avance plafonnée à 25 % suivie du solde en fin de mois. Le gérant peut enregistrer les paiements ; ils apparaissent comme dépenses de salaires et commissions et sont limités au net mensuel restant.
+
+Le module **Dépenses** permet de ventiler les coûts par activité, notamment l’électricité, le carburant et le dépannage du groupe électrogène. Les dépenses saisies par un autre rôle restent en attente ; seul le gérant peut autoriser leur imputation à la caisse. **Rapports** propose des synthèses financières, administratives et de stocks sur la journée, les sept derniers jours ou le mois en cours, par activité ou globalement. Le résumé à partager ouvre WhatsApp avec le rapport sélectionné prérempli au numéro du PDG ; l’envoi doit être confirmé manuellement.
 
 Le module **Lavage → Lavage à domicile** permet au gérant de planifier une intervention avec adresse, date, heure et consignes, d’affecter un laveur, de vérifier un kit mobile et de suivre les étapes jusqu’à l’arrivée puis la fin de prestation. L’itinéraire ouvre une recherche d’adresse dans Google Maps. Ce parcours est actuellement dans l’application du gérant : il ne constitue pas encore une application mobile dédiée au laveur. Les prises de photos avant/après, les notifications externes, l’encaissement mobile, le mode hors ligne et la synchronisation différée restent à connecter.
 
@@ -48,9 +58,9 @@ L’application de bureau est empaquetée avec Electron : le PC du gérant n’a
 
 1. Configurez `.env.local` avec l’URL Supabase et la clé publishable du projet.
 2. Depuis Windows, lancez `npm run desktop:dist`.
-3. Récupérez l’installateur `AutoGestion Pro Setup <version>.exe` dans le dossier `release/`, puis exécutez-le sur le PC cible.
+3. Récupérez l’installateur `N.O.B BUSINESS Setup <version>.exe` dans le dossier `release/`, puis exécutez-le sur le PC cible.
 
-L’installateur utilise le logo AutoGestion Pro, crée des raccourcis dans le menu Démarrer et sur le bureau et permet de choisir le dossier d’installation. Il n’est pas signé numériquement : Windows peut afficher un avertissement SmartScreen. L’application a besoin d’Internet pour se connecter à Supabase et rechercher les mises à jour. Toute modification des variables Supabase nécessite de générer un nouvel installateur. La clé publishable est incluse dans l’application installée ; elle ne doit jamais être une clé secrète ou `service_role`. Pour bénéficier des mises à jour automatiques, installez le setup téléchargé depuis une release GitHub créée par le workflow ; un build local sans dépôt GitHub configuré ne connaît pas le flux de mise à jour.
+L’installateur utilise le logo N.O.B BUSINESS, crée des raccourcis dans le menu Démarrer et sur le bureau et permet de choisir le dossier d’installation. Il n’est pas signé numériquement : Windows peut afficher un avertissement SmartScreen. L’application a besoin d’Internet pour se connecter à Supabase et rechercher les mises à jour. Toute modification des variables Supabase nécessite de générer un nouvel installateur. La clé publishable est incluse dans l’application installée ; elle ne doit jamais être une clé secrète ou `service_role`. Pour bénéficier des mises à jour automatiques, installez le setup téléchargé depuis une release GitHub créée par le workflow ; un build local sans dépôt GitHub configuré ne connaît pas le flux de mise à jour.
 
 ### Publication et mises à jour automatiques
 
@@ -59,10 +69,10 @@ Le workflow `.github/workflows/release.yml` construit l’installateur Windows e
 1. Envoyez le projet vers un dépôt GitHub public et assurez-vous que les Actions peuvent créer des releases (`contents: write` est déjà déclaré dans le workflow).
 2. Dans **Settings → Secrets and variables → Actions → Variables**, ajoutez `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY`, avec les mêmes valeurs publiques que dans `.env.local`. Ne configurez jamais une clé `service_role`.
 3. Incrémentez `version` dans `package.json`.
-4. Créez et poussez le tag correspondant, par exemple `v1.0.2` si `package.json` indique `1.0.2` : `git tag v1.0.2`, puis `git push origin v1.0.2`.
+4. Créez et poussez le tag correspondant, par exemple `v1.0.3` si `package.json` indique `1.0.3` : `git tag v1.0.3`, puis `git push origin v1.0.3`.
 5. Vérifiez la fin du workflow dans l’onglet **Actions** du dépôt. La release contient l’installateur et le manifeste utilisés par l’application.
 
-Les versions installées avec l’ancien setup **1.0.0** ne contiennent pas le module de mise à jour : il faut installer une première fois le nouveau setup **1.0.1**, publié par le workflow. Ensuite, l’application recherche les releases au démarrage, télécharge une nouvelle version et propose de redémarrer pour l’installer. Une modification locale n’est pas publiée automatiquement : elle doit d’abord être incluse dans une release GitHub. Les postes doivent avoir accès à Internet et le dépôt doit rester public pour permettre le téléchargement sans secret embarqué.
+Les versions installées avec l’ancien setup **1.0.0** ne contiennent pas le module de mise à jour ; les versions ultérieures le recherchent au démarrage. Après publication d’une release GitHub valide, l’application télécharge la nouvelle version et propose de redémarrer pour l’installer. Une modification locale n’est pas publiée automatiquement : elle doit d’abord être incluse dans une release GitHub. Les postes doivent avoir accès à Internet et le dépôt doit rester public pour permettre le téléchargement sans secret embarqué.
 
 ## Persistance
 

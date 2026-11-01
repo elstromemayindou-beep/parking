@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Module 2: Station de Lavage / Car Wash & Detailing
+ * N.O.B BUSINESS - Module 2: Station de Lavage / Car Wash & Detailing
  * Requirements:
  * - RF-21 : Gestion de file d'attente avec attribution des laveurs et statut d'avancement
  * - Tarifs des formules configurés par succursale
@@ -45,7 +45,7 @@ export const LavageModule: React.FC = () => {
     annulerLavage,
     signalerProduitLavage,
     traiterDemandeConsommableLavage,
-    tarifsServices,
+    configurationEntreprise,
     formatCurrency,
     showNotification
   } = useApp();
@@ -58,7 +58,9 @@ export const LavageModule: React.FC = () => {
   const [telephone, setTelephone] = useState('');
   const [vehiculeDesc, setVehiculeDesc] = useState('');
   const [typeVehicule, setTypeVehicule] = useState<'VOITURE' | 'MOTO'>('VOITURE');
-  const [formule, setFormule] = useState<'SIMPLE' | 'COMPLET' | 'VIP_DETAILING'>('COMPLET');
+  const [categorieVehicule, setCategorieVehicule] = useState(configurationEntreprise.categoriesVehicules[0] || 'Autre');
+  const [servicesLavageSelectionnes, setServicesLavageSelectionnes] = useState<string[]>([]);
+  const [prixLavageNegocie, setPrixLavageNegocie] = useState('0');
   const [selectedLaveurIds, setSelectedLaveurIds] = useState<number[]>([]);
   const [adresseIntervention, setAdresseIntervention] = useState('');
   const [dateRendezVous, setDateRendezVous] = useState(new Date().toISOString().slice(0, 10));
@@ -74,6 +76,20 @@ export const LavageModule: React.FC = () => {
   const laveurs = employes.filter(e => e.poste === 'Laveur' && e.statut === 'ACTIF');
   const produitsLavage = piecesStock.filter(p => p.categorie === 'Consommables Lavage');
   const demandesEnAttente = demandesConsommablesLavage.filter(d => d.statut === 'EN_ATTENTE');
+  const servicesLavageActifs = configurationEntreprise.servicesLavage.filter(service => service.actif);
+  const servicesChoisis = servicesLavageActifs.filter(service => servicesLavageSelectionnes.includes(service.id));
+  const totalCatalogueLavage = servicesChoisis.reduce(
+    (total, service) => total + (service.prix_par_categorie[categorieVehicule] || 0),
+    0
+  );
+  React.useEffect(() => {
+    if (!configurationEntreprise.categoriesVehicules.includes(categorieVehicule)) {
+      setCategorieVehicule(configurationEntreprise.categoriesVehicules[0] || 'Autre');
+    }
+  }, [configurationEntreprise.categoriesVehicules, categorieVehicule]);
+  React.useEffect(() => {
+    setPrixLavageNegocie(String(totalCatalogueLavage));
+  }, [categorieVehicule, servicesLavageSelectionnes, totalCatalogueLavage]);
   const kitItems = [
     'Produits et consommables',
     'Microfibres propres',
@@ -133,12 +149,24 @@ export const LavageModule: React.FC = () => {
       showNotification('Choisissez un laveur pour planifier l’intervention à domicile.', 'warning');
       return;
     }
+    if (servicesChoisis.length === 0) {
+      showNotification('Sélectionnez au moins une prestation de lavage.', 'warning');
+      return;
+    }
+    if (servicesChoisis.some(service => (service.prix_par_categorie[categorieVehicule] || 0) <= 0)) {
+      showNotification('Renseignez le tarif de chaque prestation pour cette catégorie dans les paramètres.', 'warning');
+      return;
+    }
+    if (!Number.isInteger(Number(prixLavageNegocie)) || Number(prixLavageNegocie) < 1000) {
+      showNotification('Le montant négocié du lavage doit être au minimum de 1 000 FCFA.', 'warning');
+      return;
+    }
 
     ajouterLavage(
       plaque.trim(),
       clientNom.trim(),
       telephone.trim(),
-      formule,
+      'PERSONNALISE',
       selectedLaveurIds[0],
       vehiculeDesc || 'Véhicule standard',
       serviceMode === 'DOMICILE'
@@ -150,7 +178,14 @@ export const LavageModule: React.FC = () => {
           }
         : undefined,
       selectedLaveurIds,
-      typeVehicule
+      typeVehicule,
+      servicesChoisis.map(service => ({
+        service_id: service.id,
+        nom: service.nom,
+        montant: service.prix_par_categorie[categorieVehicule] || 0
+      })),
+      Number(prixLavageNegocie),
+      categorieVehicule
     );
 
     setModalOpen(false);
@@ -160,6 +195,8 @@ export const LavageModule: React.FC = () => {
     setTelephone('');
     setVehiculeDesc('');
     setTypeVehicule('VOITURE');
+    setServicesLavageSelectionnes([]);
+    setPrixLavageNegocie('0');
     setSelectedLaveurIds([]);
     setAdresseIntervention('');
     setInstructionsClient('');
@@ -210,6 +247,8 @@ export const LavageModule: React.FC = () => {
         return <span className="bg-blue-950 text-blue-200 border border-blue-600/50 text-[10px] font-bold px-2 py-0.5 rounded-full">Complet Int/Ext</span>;
       case 'SIMPLE':
         return <span className="bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Simple Express</span>;
+      case 'PERSONNALISE':
+        return <span className="bg-cyan-950 text-cyan-200 border border-cyan-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Prestations à la carte</span>;
     }
   };
 
@@ -946,51 +985,48 @@ export const LavageModule: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-300 block mb-2">
-                  Formule de Lavage
+              <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-950/50 p-3">
+                <h3 className="text-xs font-bold text-white">Prestations de lavage à la carte</h3>
+                <label className="block text-xs font-semibold text-slate-300">
+                  Catégorie du véhicule
+                  <select value={categorieVehicule} onChange={event => {
+                    setCategorieVehicule(event.target.value);
+                    setPrixLavageNegocie('0');
+                  }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white">
+                    {configurationEntreprise.categoriesVehicules.map(category => <option key={category} value={category}>{category}</option>)}
+                  </select>
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <div
-                    onClick={() => setFormule('SIMPLE')}
-                    className={`p-3 rounded-xl border cursor-pointer text-center transition ${
-                      formule === 'SIMPLE'
-                        ? 'bg-blue-600/30 border-blue-500 text-white'
-                        : 'bg-slate-800/80 border-slate-700 text-slate-400'
-                    }`}
-                  >
-                    <div className="text-xs font-bold">Express</div>
-                    <div className="text-sm font-extrabold text-blue-400 mt-1">{formatCurrency(tarifsServices.lavageSimple)}</div>
-                    <div className="text-[10px] text-slate-400">Extérieur rapide</div>
+                {servicesLavageActifs.length === 0 ? (
+                  <p className="rounded-lg bg-amber-950/40 p-3 text-xs leading-5 text-amber-200">Aucune prestation de lavage n’est configurée. Ajoutez les services et leurs tarifs dans Paramètres → N.O.B et catalogue lavage.</p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {servicesLavageActifs.map(service => (
+                      <label key={service.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={servicesLavageSelectionnes.includes(service.id)}
+                          onChange={event => setServicesLavageSelectionnes(previous => event.target.checked
+                            ? [...previous, service.id]
+                            : previous.filter(id => id !== service.id))}
+                          className="mt-0.5 accent-cyan-600"
+                        />
+                        <span className="flex-1">{service.nom}</span>
+                        <span className="font-mono font-bold text-cyan-200">{formatCurrency(service.prix_par_categorie[categorieVehicule] || 0)}</span>
+                      </label>
+                    ))}
                   </div>
-
-                  <div
-                    onClick={() => setFormule('COMPLET')}
-                    className={`p-3 rounded-xl border cursor-pointer text-center transition ${
-                      formule === 'COMPLET'
-                        ? 'bg-cyan-600/30 border-cyan-500 text-white'
-                        : 'bg-slate-800/80 border-slate-700 text-slate-400'
-                    }`}
-                  >
-                    <div className="text-xs font-bold">Complet</div>
-                    <div className="text-sm font-extrabold text-cyan-400 mt-1">{formatCurrency(tarifsServices.lavageComplet)}</div>
-                    <div className="text-[10px] text-slate-400">Intérieur + Extérieur</div>
+                )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg bg-slate-900 p-3">
+                    <p className="text-[10px] font-semibold uppercase text-slate-400">Total catalogue</p>
+                    <p className="mt-1 font-mono text-lg font-black text-white">{formatCurrency(totalCatalogueLavage)}</p>
                   </div>
-
-                  <div
-                    onClick={() => setFormule('VIP_DETAILING')}
-                    className={`p-3 rounded-xl border cursor-pointer text-center transition ${
-                      formule === 'VIP_DETAILING'
-                        ? 'bg-purple-600/30 border-purple-500 text-white'
-                        : 'bg-slate-800/80 border-slate-700 text-slate-400'
-                    }`}
-                  >
-                    <div className="text-xs font-bold">VIP Detailing</div>
-                    <div className="text-sm font-extrabold text-purple-400 mt-1">{formatCurrency(tarifsServices.lavageVipDetailing)}</div>
-                    <div className="text-[10px] text-slate-400">Shampooing sièges + Cire</div>
-                  </div>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Total convenu avec le client (minimum 1 000 FCFA)
+                    <input type="number" min="1000" step="1" value={prixLavageNegocie} onChange={event => setPrixLavageNegocie(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-lg font-bold text-white" />
+                  </label>
                 </div>
-              </div>
+              </section>
 
               <div>
                 <label className="text-xs font-bold text-slate-300 block mb-1">

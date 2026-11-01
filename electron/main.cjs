@@ -6,7 +6,7 @@ const { fileURLToPath } = require('node:url');
 
 const developmentUrl = 'http://127.0.0.1:3000';
 
-app.setName('AutoGestion Pro');
+app.setName('N.O.B BUSINESS');
 
 let mainWindow;
 let updateStatus = { state: 'idle' };
@@ -38,12 +38,12 @@ const checkForUpdates = () => {
   try {
     if (!hasGitHubUpdateFeed()) return;
   } catch (error) {
-    console.error('Unable to read AutoGestion Pro update configuration:', error);
+    console.error('Unable to read N.O.B BUSINESS update configuration:', error);
     publishUpdateStatus({ state: 'error', message: error.message });
     return;
   }
   void autoUpdater.checkForUpdates().catch(error => {
-    console.error('Unable to check for AutoGestion Pro updates:', error);
+    console.error('Unable to check for N.O.B BUSINESS updates:', error);
     publishUpdateStatus({ state: 'error', message: error.message });
   });
 };
@@ -59,7 +59,7 @@ autoUpdater.on('download-progress', progress => publishUpdateStatus({
 }));
 autoUpdater.on('update-downloaded', info => publishUpdateStatus({ state: 'downloaded', version: info.version }));
 autoUpdater.on('error', error => {
-  console.error('Unable to update AutoGestion Pro:', error);
+  console.error('Unable to update N.O.B BUSINESS:', error);
   publishUpdateStatus({ state: 'error', message: error.message });
 });
 
@@ -135,7 +135,7 @@ const createWindow = async () => {
 
 app.whenReady().then(() => {
   void createWindow().catch(error => {
-    console.error('Unable to open AutoGestion Pro:', error);
+    console.error('Unable to open N.O.B BUSINESS:', error);
     app.quit();
   });
 
@@ -146,7 +146,7 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       void createWindow().catch(error => {
-        console.error('Unable to reopen AutoGestion Pro:', error);
+        console.error('Unable to reopen N.O.B BUSINESS:', error);
       });
     }
   });

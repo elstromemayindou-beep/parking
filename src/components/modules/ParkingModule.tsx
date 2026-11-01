@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Module 1: Parking & Scan ANPR / OCR
+ * N.O.B BUSINESS - Module 1: Parking & Scan ANPR / OCR
  * Requirements:
  * - RF-28 : Cartographie dynamique du parking (places libres, occupées, hors service)
  * - RF-36 : Scan optique ANPR de plaque d'immatriculation via appareil photo
@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CapacitesParking, PlaceParking, TicketParking, PaymentMethod, ZoneParking } from '../../types';
 import { calculerMontantParking, tarifParkingTicket } from '../../utils/parkingPricing';
+import { determinerPeriodeTravail } from '../../utils/configurationEntreprise';
 import {
   ParkingSquare,
   Camera,
@@ -36,6 +37,7 @@ export const ParkingModule: React.FC = () => {
     cloturerTicketParking,
     arreterTicketParking,
     tarifsServices,
+    configurationEntreprise,
     formatCurrency,
     setReceiptModalData,
     showNotification,
@@ -55,6 +57,8 @@ export const ParkingModule: React.FC = () => {
   const [typeVehicule, setTypeVehicule] = useState<'VOITURE' | 'MOTO'>('VOITURE');
   const [selectedZone, setSelectedZone] = useState<ZoneParking>('A');
   const [typeClient, setTypeClient] = useState<'HORAIRE' | 'ABONNE_VIP' | 'CLIENT_GARAGE'>('HORAIRE');
+  const [serviceGardiennage, setServiceGardiennage] = useState(false);
+  const [serviceClock, setServiceClock] = useState(Date.now());
   const [filterQuery, setFilterQuery] = useState('');
   const [zoneFilter, setZoneFilter] = useState<'ALL' | ZoneParking>('ALL');
 
@@ -73,6 +77,11 @@ export const ParkingModule: React.FC = () => {
     return () => clearInterval(timer);
   }, [checkoutTicket]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setServiceClock(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   const handleCreateTicket = (e: React.FormEvent) => {
     e.preventDefault();
     if (!plaqueInput.trim()) {
@@ -86,7 +95,8 @@ export const ParkingModule: React.FC = () => {
       typeClient,
       'MANUEL',
       modeleInput || (typeVehicule === 'MOTO' ? 'Moto' : 'Véhicule standard'),
-      typeVehicule
+      typeVehicule,
+      serviceGardiennage
     );
     if (!ticket) return;
 
@@ -94,6 +104,7 @@ export const ParkingModule: React.FC = () => {
     setPlaqueInput('');
     setModeleInput('');
     setTypeVehicule('VOITURE');
+    setServiceGardiennage(false);
   };
 
   const handleStopTicket = (event: React.FormEvent) => {
@@ -106,12 +117,14 @@ export const ParkingModule: React.FC = () => {
   };
 
   const getTicketAmount = (ticket: TicketParking, now = Date.now()) => {
-    if (ticket.type_client !== 'HORAIRE') return 0;
+    const gardiennage = ticket.montant_gardiennage || 0;
+    if (ticket.type_client !== 'HORAIRE') return gardiennage;
     const tarif = tarifParkingTicket(ticket);
     const entree = new Date(ticket.heure_entree.replace(' ', 'T')).getTime();
     const minutes = Math.max(15, Math.ceil((now - entree) / 60000));
-    return calculerMontantParking(minutes, tarif.premiereHeure, tarif.quartHeureSupplementaire);
+    return calculerMontantParking(minutes, tarif.premiereHeure, tarif.quartHeureSupplementaire) + gardiennage;
   };
+  const isNightService = determinerPeriodeTravail(new Date(serviceClock), configurationEntreprise) === 'NUIT';
 
   const handleInitializeParking = (e: React.FormEvent) => {
     e.preventDefault();
@@ -562,6 +575,18 @@ export const ParkingModule: React.FC = () => {
                 ))}
               </div>
 
+              {isNightService && (
+                <label className="flex items-start gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/30 p-3 text-xs text-indigo-100">
+                  <input type="checkbox" checked={serviceGardiennage} disabled={configurationEntreprise.tarifGardiennageNuit <= 0} onChange={event => setServiceGardiennage(event.target.checked)} />
+                  <span>
+                    <strong className="block">Ajouter le gardiennage de nuit</strong>
+                    Forfait : {formatCurrency(configurationEntreprise.tarifGardiennageNuit)}. {configurationEntreprise.tarifGardiennageNuit <= 0
+                      ? 'Configurez un tarif supérieur à zéro dans les paramètres avant de pouvoir l’ajouter.'
+                      : 'En cas de lavage aussi, créez également le ticket dans le module Lavage ; les deux services seront encaissés séparément et visibles dans la caisse globale.'}
+                  </span>
+                </label>
+              )}
+
               <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">
                 {placesParking.length === 0
                   ? 'Les emplacements seront enregistrés pour votre établissement. Laissez une zone à 0 si vous ne l’utilisez pas.'
@@ -756,15 +781,21 @@ export const ParkingModule: React.FC = () => {
                 <span className="text-slate-400">Type de tarif :</span>
                 <span className="font-semibold text-blue-400">{checkoutTicket.type_client}</span>
               </div>
+              {checkoutTicket.service_gardiennage && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">Gardiennage de nuit :</span>
+                  <span className="font-semibold text-indigo-300">{formatCurrency(checkoutTicket.montant_gardiennage || 0)}</span>
+                </div>
+              )}
               <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-300">Montant total dû :</span>
                 <span className="text-lg font-black text-emerald-400">
-                  {checkoutTicket.type_client === 'HORAIRE' ? formatCurrency(checkoutAmount) : '0 FCFA (Abonné)'}
+                  {checkoutAmount > 0 ? formatCurrency(checkoutAmount) : '0 FCFA (Abonné)'}
                 </span>
               </div>
             </div>
 
-            {checkoutTicket.type_client === 'HORAIRE' && (
+            {checkoutAmount > 0 && (
               <div className="mb-4">
                 <label className="text-xs font-bold text-slate-300 block mb-2">
                   Mode de Paiement (RF-41)

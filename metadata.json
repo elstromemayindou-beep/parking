@@ -1,5 +1,5 @@
 {
-  "name": "AutoGestion Pro - Hub Desktop Gérant",
+  "name": "N.O.B BUSINESS - Gestion d’établissement",
   "description": "Système d'information intégré pour complexes automobiles : Garage, Lavage, Parking OCR, Caisse Mobile Money, Stocks, RH & Dettes.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

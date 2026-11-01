@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Module 4: Caisse & Recettes
+ * N.O.B BUSINESS - Module 4: Caisse & Recettes
  * Requirements:
  * - RF-41 : Enregistrement encaissements Espèces, MTN Mobile Money et Airtel Money
  * - RF-43 : Calcul en direct du solde net de caisse (Encaissements bruts - Dépenses du jour)
@@ -37,7 +37,8 @@ export const CaisseModule: React.FC = () => {
     creerFactureDirecte,
     annulerFacture,
     setReceiptModalData,
-    showNotification
+    showNotification,
+    departementActif
   } = useApp();
 
   const [clotureModalOpen, setClotureModalOpen] = useState(false);
@@ -59,9 +60,32 @@ export const CaisseModule: React.FC = () => {
   const [modePaiementDirect, setModePaiementDirect] = useState<PaymentMethod>('MTN_MOMO');
   const [referenceDirect, setReferenceDirect] = useState('');
 
-  const recettesBrutes = sessionCaisse.recettes_especes_theorique + sessionCaisse.recettes_momo_theorique + sessionCaisse.recettes_airtel_theorique;
-  const soldeNet = sessionCaisse.solde_net_theorique;
-  const encaissementsJournal = encaissements
+  const departmentOfInvoice = (invoice: Facture | undefined) => invoice?.departement || (
+    invoice?.type_service === 'LAVAGE' ? 'LAVAGE'
+      : invoice?.type_service === 'SALON' ? 'SALON'
+        : invoice?.type_service === 'PARKING' ? 'PARKING'
+          : invoice?.type_service === 'GARAGE' || invoice?.type_service === 'VENTE_PIECE' ? 'MECANIQUE'
+            : undefined
+  );
+  const paiementsVisibles = encaissements.filter(payment => {
+    if (departementActif === 'GLOBAL') return true;
+    const invoice = factures.find(item => item.id === payment.facture_id);
+    return (payment.departement || departmentOfInvoice(invoice)) === departementActif;
+  });
+  const depensesVisibles = depenses.filter(expense => departementActif === 'GLOBAL' || expense.departement === departementActif);
+  const paiementsDuJour = paiementsVisibles.filter(payment => payment.created_at.slice(0, 10) === sessionCaisse.date);
+  const recettesEspeces = paiementsDuJour.filter(payment => payment.mode_paiement === 'ESPECES').reduce((sum, payment) => sum + payment.montant, 0);
+  const recettesMomo = paiementsDuJour.filter(payment => payment.mode_paiement === 'MTN_MOMO').reduce((sum, payment) => sum + payment.montant, 0);
+  const recettesAirtel = paiementsDuJour.filter(payment => payment.mode_paiement === 'AIRTEL_MONEY').reduce((sum, payment) => sum + payment.montant, 0);
+  const recettesVirement = paiementsDuJour.filter(payment => payment.mode_paiement === 'VIREMENT').reduce((sum, payment) => sum + payment.montant, 0);
+  const depensesValidees = depensesVisibles.filter(expense =>
+    expense.created_at.slice(0, 10) === sessionCaisse.date &&
+    expense.valide_par_gerant &&
+    (!expense.accord_proprietaire_requis || expense.valide_par_proprietaire)
+  ).reduce((sum, expense) => sum + expense.montant, 0);
+  const recettesBrutes = recettesEspeces + recettesMomo + recettesAirtel + recettesVirement;
+  const soldeNet = recettesBrutes - depensesValidees;
+  const encaissementsJournal = paiementsVisibles
     .filter(payment => journalPeriode === 'HISTORIQUE' || payment.created_at.slice(0, 10) === sessionCaisse.date)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
@@ -111,14 +135,16 @@ export const CaisseModule: React.FC = () => {
             <span>Module Caisse & Trésorerie</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-white">
-            Gestion de Caisse, Mobile Money & Clôture Aveugle
+            {departementActif === 'GLOBAL' ? 'Caisse globale' : `Caisse · ${departementActif}`}
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Solde net en temps réel (RF-43) et clôture journalière à l'aveugle avec traçabilité des écarts (RF-47).
+            {departementActif === 'GLOBAL'
+              ? 'Tous les encaissements et dépenses des activités, avec clôture de la caisse globale.'
+              : `Encaissements et dépenses rattachés uniquement à l’activité ${departementActif}. La clôture physique reste globale.`}
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => setEncaissementModalOpen(true)}
             className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition hover:scale-105 cursor-pointer"
@@ -132,11 +158,12 @@ export const CaisseModule: React.FC = () => {
               setClotureResult(null);
               setClotureModalOpen(true);
             }}
-            disabled={sessionCaisse.statut === 'CLOTUREE'}
+            disabled={sessionCaisse.statut === 'CLOTUREE' || departementActif !== 'GLOBAL'}
+            title={departementActif !== 'GLOBAL' ? 'La clôture de session reste globale. Sélectionnez toutes les activités.' : undefined}
             className="px-4 py-2.5 rounded-xl bg-blue-950 hover:bg-blue-900 text-white border border-blue-600/50 font-bold text-xs flex items-center justify-center gap-2 transition hover:scale-105 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Lock className="w-4 h-4 text-blue-400" />
-            <span>{sessionCaisse.statut === 'CLOTUREE' ? 'Session clôturée' : 'Clôture de caisse'}</span>
+            <span>{departementActif !== 'GLOBAL' ? 'Clôture globale uniquement' : sessionCaisse.statut === 'CLOTUREE' ? 'Session clôturée' : 'Clôture de caisse'}</span>
           </button>
         </div>
       </div>
@@ -153,7 +180,7 @@ export const CaisseModule: React.FC = () => {
             {formatCurrency(soldeNet)}
           </div>
           <div className="text-[11px] text-slate-300 mt-2">
-            Recettes ({formatCurrency(recettesBrutes)}) - Dépenses ({formatCurrency(sessionCaisse.depenses_validees)})
+            Recettes ({formatCurrency(recettesBrutes)}) - Dépenses ({formatCurrency(depensesValidees)})
           </div>
         </div>
 
@@ -164,7 +191,7 @@ export const CaisseModule: React.FC = () => {
             <Smartphone className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-xl font-extrabold text-white font-mono">
-            {formatCurrency(sessionCaisse.recettes_momo_theorique)}
+            {formatCurrency(recettesMomo)}
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
             Portefeuille digital MTN MoMo
@@ -178,7 +205,7 @@ export const CaisseModule: React.FC = () => {
             <Smartphone className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-xl font-extrabold text-white font-mono">
-            {formatCurrency(sessionCaisse.recettes_airtel_theorique)}
+            {formatCurrency(recettesAirtel)}
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
             Portefeuille Airtel Money
@@ -192,7 +219,7 @@ export const CaisseModule: React.FC = () => {
             <Coins className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-xl font-extrabold text-white font-mono">
-            {formatCurrency(sessionCaisse.recettes_especes_theorique)}
+            {formatCurrency(recettesEspeces)}
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
             Tiroir-caisse physique

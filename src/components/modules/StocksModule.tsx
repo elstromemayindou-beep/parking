@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Module 6: Stocks, Magasin & Achats
+ * N.O.B BUSINESS - Module 6: Stocks, Magasin & Achats
  * Requirements:
  * - RF-68 : Suivi des stocks pièces/produits, alertes de seuil critique et bon de commande
  * - RF-72 : Transfert de pièces détachées inter-succursales avec bon de décharge
@@ -34,7 +34,8 @@ export const StocksModule: React.FC = () => {
     ajusterStockPiece,
     creerTransfertStock,
     formatCurrency,
-    showNotification
+    showNotification,
+    departementActif
   } = useApp();
 
   const [filterQuery, setFilterQuery] = useState('');
@@ -69,7 +70,8 @@ export const StocksModule: React.FC = () => {
     'Suspension',
     'Pneumatiques',
     'Électricité & Batterie',
-    'Consommables Lavage'
+    'Consommables Lavage',
+    'Salon & Coiffure'
   ];
 
   const handleCreatePiece = (e: React.FormEvent) => {
@@ -89,7 +91,10 @@ export const StocksModule: React.FC = () => {
       prix_achat: Number(prixAchat),
       prix_vente: Number(prixVente),
       fournisseur: fournisseur || 'Fournisseur Local',
-      emplacement: emplacement || 'Magasin Central'
+      emplacement: emplacement || 'Magasin Central',
+      departement: departementActif === 'GLOBAL'
+        ? categorie === 'Salon & Coiffure' ? 'SALON' : categorie === 'Consommables Lavage' ? 'LAVAGE' : 'MECANIQUE'
+        : departementActif
     });
 
     setModalNewPieceOpen(false);
@@ -118,7 +123,18 @@ export const StocksModule: React.FC = () => {
     }
   };
 
-  const filteredPieces = piecesStock.filter(p => {
+  const departmentOfPiece = (piece: PieceStock) => piece.departement || (
+    piece.categorie === 'Salon & Coiffure' ? 'SALON'
+      : piece.categorie === 'Consommables Lavage' ? 'LAVAGE'
+        : 'MECANIQUE'
+  );
+  const piecesVisibles = piecesStock.filter(piece => departementActif === 'GLOBAL' || departmentOfPiece(piece) === departementActif);
+  const mouvementsVisibles = mouvementsStock.filter(movement => {
+    if (departementActif === 'GLOBAL') return true;
+    const piece = piecesStock.find(item => item.id === movement.piece_id);
+    return (movement.departement || (piece ? departmentOfPiece(piece) : undefined)) === departementActif;
+  });
+  const filteredPieces = piecesVisibles.filter(p => {
     const matchesQuery = p.nom.toLowerCase().includes(filterQuery.toLowerCase()) ||
       p.reference.toLowerCase().includes(filterQuery.toLowerCase()) ||
       p.fournisseur.toLowerCase().includes(filterQuery.toLowerCase());
@@ -127,7 +143,7 @@ export const StocksModule: React.FC = () => {
     return matchesQuery && p.categorie === categoryFilter;
   });
 
-  const piecesEnAlerte = piecesStock.filter(p => p.quantite_disponible <= p.seuil_alerte);
+  const piecesEnAlerte = piecesVisibles.filter(p => p.quantite_disponible <= p.seuil_alerte);
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -146,7 +162,7 @@ export const StocksModule: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => setModalTransfertOpen(true)}
             className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-blue-400 border border-blue-500/40 font-bold text-xs flex items-center justify-center gap-2 transition hover:scale-105 cursor-pointer"
@@ -309,7 +325,7 @@ export const StocksModule: React.FC = () => {
           <h2 className="text-sm font-bold text-white">Journal détaillé des mouvements de stock</h2>
           <p className="mt-1 text-xs text-slate-400">Entrées, consommations lavage/garage, transferts et ajustements sont conservés avec le responsable et le motif.</p>
         </div>
-        {mouvementsStock.length === 0 ? (
+        {mouvementsVisibles.length === 0 ? (
           <p className="p-5 text-center text-xs text-slate-500">Aucun mouvement enregistré. Les mouvements seront tracés au fur et à mesure des opérations.</p>
         ) : (
           <div className="max-h-96 overflow-auto">
@@ -326,7 +342,7 @@ export const StocksModule: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {mouvementsStock.slice(0, 200).map(movement => (
+                {mouvementsVisibles.slice(0, 200).map(movement => (
                   <tr key={movement.id}>
                     <td className="px-4 py-2.5 font-mono text-[10px] text-slate-400">{movement.created_at}</td>
                     <td className="px-4 py-2.5"><span className="font-bold text-white">{movement.piece_nom}</span><span className="ml-1 text-slate-500">{movement.reference_piece}</span></td>

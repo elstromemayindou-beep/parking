@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Module 5: Employés, RH & Discipline
+ * N.O.B BUSINESS - Module 5: Employés, RH & Discipline
  * Requirements:
  * - RF-55 : Fiches employés avec calcul du salaire net (Base + Primes - Amendes)
  * - RF-58 : Saisie des retenues/amendes motivées (retards, erreurs caisse, dégradation)
@@ -9,7 +9,7 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Employe, PrimeAmende } from '../../types';
+import { Depense, Employe, PrimeAmende } from '../../types';
 import {
   Users2,
   UserPlus,
@@ -39,20 +39,27 @@ export const EmployesModule: React.FC = () => {
   const {
     employes,
     primesAmendes,
+    depenses,
     pointerEmploye,
     ajouterEmploye,
     ajouterPrimeAmende,
     changerStatutEmploye,
     radierEmploye,
+    enregistrerPaiementEmploye,
     formatCurrency,
     setReceiptModalData,
     showNotification,
-    logsAudit
+    logsAudit,
+    departementActif,
+    userRole
   } = useApp();
 
   const [selectedEmploye, setSelectedEmploye] = useState<Employe | null>(null);
   const [primeAmendeModalOpen, setPrimeAmendeModalOpen] = useState(false);
   const [bulletinModalOpen, setBulletinModalOpen] = useState(false);
+  const [payrollModalOpen, setPayrollModalOpen] = useState(false);
+  const [payrollType, setPayrollType] = useState<NonNullable<Depense['type_paie']>>('PAIEMENT');
+  const [payrollAmount, setPayrollAmount] = useState(0);
   const [employeeModalOpen, setEmployeeModalOpen] = useState(false);
   const [radiationModalOpen, setRadiationModalOpen] = useState(false);
   const [radiationMotif, setRadiationMotif] = useState('');
@@ -61,6 +68,8 @@ export const EmployesModule: React.FC = () => {
     nom_complet: '',
     telephone: '',
     poste: 'Laveur' as Employe['poste'],
+    departement: 'LAVAGE' as NonNullable<Employe['departement']>,
+    rythme_paie: '1_15' as NonNullable<Employe['rythme_paie']>,
     salaire_base: 250000,
     date_embauche: new Date().toISOString().slice(0, 10),
     email: '',
@@ -103,11 +112,22 @@ export const EmployesModule: React.FC = () => {
   const [actePreuve, setActePreuve] = useState('');
 
   const calculateSalaryBreakdown = (emp: Employe) => {
-    const actes = primesAmendes.filter(p => p.employe_id === emp.id && !p.annulee);
+    const payrollMonth = new Date().toISOString().slice(0, 7);
+    const actes = primesAmendes.filter(p => p.employe_id === emp.id && !p.annulee && p.date_enregistrement.slice(0, 7) === payrollMonth);
     const totalPrimes = actes.filter(p => p.type_acte === 'PRIME').reduce((sum, p) => sum + p.montant, 0);
     const totalAmendes = actes.filter(p => p.type_acte === 'AMENDE').reduce((sum, p) => sum + p.montant, 0);
     const salaireNet = emp.salaire_base + totalPrimes - totalAmendes;
     return { totalPrimes, totalAmendes, salaireNet, actes };
+  };
+
+  const handlePayrollSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedEmploye) return;
+    if (enregistrerPaiementEmploye(selectedEmploye.id, Number(payrollAmount), payrollType)) {
+      setPayrollModalOpen(false);
+      setSelectedEmploye(null);
+      setPayrollAmount(0);
+    }
   };
 
   const getProratedSalary = (emp: Employe) => {
@@ -181,12 +201,20 @@ export const EmployesModule: React.FC = () => {
     setEmployeeForm(initialEmployeeForm);
   };
 
+  const departmentOfEmployee = (employee: Employe) => employee.departement || (
+    employee.poste === 'Coiffeur' ? 'SALON'
+      : employee.poste === 'Laveur' ? 'LAVAGE'
+        : employee.poste === 'Agent Parking' || employee.poste === 'Gardien' ? 'PARKING'
+          : employee.poste === 'Mécanicien' || employee.poste === "Chef d'Atelier" ? 'MECANIQUE'
+            : undefined
+  );
   const filteredEmployes = employes.filter(e =>
-    e.nom_complet.toLowerCase().includes(filterQuery.toLowerCase()) ||
-    e.poste.toLowerCase().includes(filterQuery.toLowerCase()) ||
-    e.telephone.includes(filterQuery) ||
-    (e.email || '').toLowerCase().includes(filterQuery.toLowerCase()) ||
-    (e.numero_piece_identite || '').toLowerCase().includes(filterQuery.toLowerCase())
+    (departementActif === 'GLOBAL' || departmentOfEmployee(e) === departementActif) &&
+    (e.nom_complet.toLowerCase().includes(filterQuery.toLowerCase()) ||
+      e.poste.toLowerCase().includes(filterQuery.toLowerCase()) ||
+      e.telephone.includes(filterQuery) ||
+      (e.email || '').toLowerCase().includes(filterQuery.toLowerCase()) ||
+      (e.numero_piece_identite || '').toLowerCase().includes(filterQuery.toLowerCase()))
   );
 
   return (
@@ -401,6 +429,13 @@ export const EmployesModule: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredEmployes.map((emp) => {
           const { totalPrimes, totalAmendes, salaireNet } = calculateSalaryBreakdown(emp);
+          const payrollMonth = new Date().toISOString().slice(0, 7);
+          const paidThisMonth = depenses.filter(expense =>
+            expense.employe_id === emp.id &&
+            expense.categorie === 'Salaires & commissions' &&
+            (expense.periode_paie || expense.created_at.slice(0, 7)) === payrollMonth
+          ).reduce((sum, expense) => sum + expense.montant, 0);
+          const salaryRemaining = Math.max(0, salaireNet - paidThisMonth);
 
           return (
             <div
@@ -454,6 +489,8 @@ export const EmployesModule: React.FC = () => {
                   {emp.adresse && <div className="flex items-start gap-1.5"><MapPin className="mt-0.5 h-3 w-3 shrink-0" />{emp.adresse}</div>}
                   <div className="font-mono">🗓️ Embauche: {emp.date_embauche}</div>
                   {emp.type_contrat && <div>Contrat : {emp.type_contrat}</div>}
+                  <div>Activité : {departmentOfEmployee(emp) || 'Non rattaché'}</div>
+                  <div>Rythme de paie : {emp.rythme_paie === 'AVANCE_25_FIN_MOIS' ? '25 % d’avance, solde fin de mois' : '1er et 15'}</div>
                   {emp.qualification && <div>Qualification : {emp.qualification}</div>}
                   {emp.contact_urgence_nom && (
                     <div className="pt-1">
@@ -525,6 +562,17 @@ export const EmployesModule: React.FC = () => {
                     <span>Net à Payer (RF-55) :</span>
                     <span className="font-mono text-blue-300">{formatCurrency(salaireNet)}</span>
                   </div>
+                  <div className="flex justify-between border-t border-slate-800 pt-1 text-slate-300">
+                    <span>Déjà payé ce mois :</span><span className="font-mono">{formatCurrency(paidThisMonth)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-amber-200">
+                    <span>Reste à payer :</span><span className="font-mono">{formatCurrency(salaryRemaining)}</span>
+                  </div>
+                  <p className="pt-1 text-[10px] text-slate-400">
+                    {emp.rythme_paie === 'AVANCE_25_FIN_MOIS'
+                      ? `Avance maximale : ${formatCurrency(Math.round(salaireNet * 0.25))} (25 %), puis solde en fin de mois.`
+                      : 'Paie prévue les 1er et 15 ; les montants des deux versements restent à définir par le gérant.'}
+                  </p>
                 </div>
               </div>
 
@@ -549,6 +597,27 @@ export const EmployesModule: React.FC = () => {
                 >
                   Bulletin de Paie
                 </button>
+                {emp.statut === 'ACTIF' && userRole === 'GERANT' && (
+                  <button
+                    onClick={() => {
+                      const now = new Date();
+                      const initialType = emp.rythme_paie === 'AVANCE_25_FIN_MOIS'
+                        ? 'AVANCE_25'
+                        : now.getDate() <= 15 ? 'PREMIERE_QUINZAINE' : 'SECONDE_QUINZAINE';
+                      setSelectedEmploye(emp);
+                      setPayrollType(initialType);
+                      setPayrollAmount(emp.rythme_paie === 'AVANCE_25_FIN_MOIS'
+                        ? Math.min(salaryRemaining, Math.max(0, Math.round(salaireNet * 0.25) - depenses
+                          .filter(expense => expense.employe_id === emp.id && expense.type_paie === 'AVANCE_25' && (expense.periode_paie || expense.created_at.slice(0, 7)) === payrollMonth)
+                          .reduce((sum, expense) => sum + expense.montant, 0)))
+                        : salaryRemaining);
+                      setPayrollModalOpen(true);
+                    }}
+                    className="col-span-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20"
+                  >
+                    Enregistrer un paiement de paie
+                  </button>
+                )}
                 {emp.statut !== 'RADIE' && (
                   <button
                     onClick={() => {
@@ -615,8 +684,21 @@ export const EmployesModule: React.FC = () => {
               <fieldset className="grid gap-3 sm:grid-cols-2">
                 <legend className="mb-2 text-xs font-bold uppercase tracking-wide text-blue-300">Informations professionnelles</legend>
                 <label className="text-xs font-semibold text-slate-300">Poste *
-                  <select value={employeeForm.poste} onChange={e => setEmployeeForm(prev => ({ ...prev, poste: e.target.value as Employe['poste'] }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white">
-                    <option>Mécanicien</option><option>Laveur</option><option>Agent Parking</option><option>Caissier</option><option>Chef d'Atelier</option><option>Réceptionniste</option>
+                  <select value={employeeForm.poste} onChange={e => {
+                    const poste = e.target.value as Employe['poste'];
+                    const departement = poste === 'Coiffeur' ? 'SALON'
+                      : poste === 'Laveur' ? 'LAVAGE'
+                        : poste === 'Agent Parking' || poste === 'Gardien' ? 'PARKING'
+                          : poste === 'Mécanicien' || poste === "Chef d'Atelier" ? 'MECANIQUE'
+                            : employeeForm.departement;
+                    setEmployeeForm(prev => ({ ...prev, poste, departement }));
+                  }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white">
+                    <option>Mécanicien</option><option>Laveur</option><option>Coiffeur</option><option>Agent Parking</option><option>Gardien</option><option>Caissier</option><option>Chef d'Atelier</option><option>Réceptionniste</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-slate-300">Activité de rattachement
+                  <select value={employeeForm.departement} onChange={event => setEmployeeForm(prev => ({ ...prev, departement: event.target.value as NonNullable<Employe['departement']> }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white">
+                    <option value="LAVAGE">Lavage</option><option value="SALON">Salon</option><option value="MECANIQUE">Garage / mécanique</option><option value="PARKING">Parking / gardiennage</option>
                   </select>
                 </label>
                 <label className="text-xs font-semibold text-slate-300">Type de contrat
@@ -629,6 +711,12 @@ export const EmployesModule: React.FC = () => {
                 </label>
                 <label className="text-xs font-semibold text-slate-300">Salaire de base (FCFA) *
                   <input required type="number" min="0" step="1000" value={employeeForm.salaire_base} onChange={e => setEmployeeForm(prev => ({ ...prev, salaire_base: Number(e.target.value) }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+                </label>
+                <label className="text-xs font-semibold text-slate-300">Rythme de paie
+                  <select value={employeeForm.rythme_paie} onChange={event => setEmployeeForm(previous => ({ ...previous, rythme_paie: event.target.value as NonNullable<Employe['rythme_paie']> }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white">
+                    <option value="1_15">Paiement les 1er et 15</option>
+                    <option value="AVANCE_25_FIN_MOIS">Avance de 25 %, solde en fin de mois</option>
+                  </select>
                 </label>
                 <label className="text-xs font-semibold text-slate-300 sm:col-span-2">Diplômes, qualifications ou compétences
                   <input value={employeeForm.qualification} onChange={e => setEmployeeForm(prev => ({ ...prev, qualification: e.target.value }))} placeholder="Ex. mécanique auto, permis B, caisse…" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
@@ -819,7 +907,7 @@ export const EmployesModule: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Bulletin de Salaire Net (RF-55)</h3>
-                  <p className="text-xs text-slate-400">Période : Octobre 2026</p>
+                  <p className="text-xs text-slate-400">Période : {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</p>
                 </div>
               </div>
               <button
@@ -871,6 +959,66 @@ export const EmployesModule: React.FC = () => {
                         ))}
                       </div>
                     )}
+                    {payrollModalOpen && selectedEmploye && (() => {
+                      const { salaireNet } = calculateSalaryBreakdown(selectedEmploye);
+                      const payrollMonth = new Date().toISOString().slice(0, 7);
+                      const alreadyPaid = depenses.filter(expense =>
+                        expense.employe_id === selectedEmploye.id &&
+                        expense.categorie === 'Salaires & commissions' &&
+                        (expense.periode_paie || expense.created_at.slice(0, 7)) === payrollMonth
+                      ).reduce((sum, expense) => sum + expense.montant, 0);
+                      const remaining = Math.max(0, salaireNet - alreadyPaid);
+                      const advanceUsed = depenses.filter(expense =>
+                        expense.employe_id === selectedEmploye.id &&
+                        expense.type_paie === 'AVANCE_25' &&
+                        (expense.periode_paie || expense.created_at.slice(0, 7)) === payrollMonth
+                      ).reduce((sum, expense) => sum + expense.montant, 0);
+                      const advanceAvailable = Math.max(0, Math.round(salaireNet * 0.25) - advanceUsed);
+                      const isAdvanceSchedule = selectedEmploye.rythme_paie === 'AVANCE_25_FIN_MOIS';
+                      return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+                          <form onSubmit={handlePayrollSubmit} className="w-full max-w-md space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+                            <div>
+                              <h2 className="text-lg font-bold text-white">Paiement de paie · {selectedEmploye.nom_complet}</h2>
+                              <p className="mt-1 text-xs text-slate-400">Mois : {payrollMonth} · Net restant : {formatCurrency(remaining)}</p>
+                            </div>
+                            <label className="block text-xs font-semibold text-slate-300">Échéance
+                              <select value={payrollType} onChange={event => {
+                                const selectedType = event.target.value as NonNullable<Depense['type_paie']>;
+                                setPayrollType(selectedType);
+                                if (selectedType === 'AVANCE_25') setPayrollAmount(advanceAvailable);
+                                else if (selectedType === 'SOLDE') setPayrollAmount(remaining);
+                                else setPayrollAmount(remaining);
+                              }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white">
+                                {isAdvanceSchedule ? (
+                                  <>
+                                    <option value="AVANCE_25">Avance de 25 % (maximum {formatCurrency(advanceAvailable)})</option>
+                                    <option value="SOLDE">Solde de fin de mois</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="PREMIERE_QUINZAINE">Paie du 1er au 15</option>
+                                    <option value="SECONDE_QUINZAINE">Paie du 16 à la fin du mois</option>
+                                  </>
+                                )}
+                              </select>
+                            </label>
+                            <label className="block text-xs font-semibold text-slate-300">Montant réellement payé (FCFA)
+                              <input required type="number" min="1" max={remaining} step="1" value={payrollAmount} onChange={event => setPayrollAmount(Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 font-mono text-lg font-bold text-white" />
+                            </label>
+                            <p className="rounded-lg bg-slate-800 p-3 text-xs leading-5 text-slate-300">
+                              {isAdvanceSchedule
+                                ? `L’avance est plafonnée à 25 % (${formatCurrency(advanceAvailable)} encore disponible). Le solde est calculé après les paiements déjà enregistrés.`
+                                : 'Le salaire est payé sur les deux échéances prévues. Aucun partage 50/50 n’est imposé : saisissez le montant réellement remis.'}
+                            </p>
+                            <div className="flex justify-end gap-2">
+                              <button type="button" onClick={() => setPayrollModalOpen(false)} className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200">Annuler</button>
+                              <button type="submit" className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-500">Enregistrer le paiement</button>
+                            </div>
+                          </form>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Total Net */}

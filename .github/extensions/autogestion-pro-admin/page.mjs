@@ -4,7 +4,7 @@ export const renderCanvasPage = () => `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
-  <title>AutoGestion Pro — Suivi du projet</title>
+  <title>N.O.B BUSINESS — Suivi du projet</title>
   <style>
     :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f3f6fb; color: #172033; }
     body { margin: 0; padding: 1.5rem; }
@@ -31,9 +31,9 @@ export const renderCanvasPage = () => `<!doctype html>
 <body>
   <main>
     <header>
-      <img src="/logo.svg" alt="Logo AutoGestion Pro">
+      <img src="/logo.svg" alt="Logo N.O.B BUSINESS">
       <div>
-        <h1>Suivi AutoGestion Pro</h1>
+        <h1>Suivi N.O.B BUSINESS</h1>
         <p>Tarifs, profil du gérant, identité visuelle et préparation des releases.</p>
       </div>
     </header>
@@ -54,7 +54,7 @@ export const renderCanvasPage = () => `<!doctype html>
       <article>
         <h2>Logo de l’application</h2>
         <p>Le même logo est utilisé dans l’en-tête, le navigateur, l’application Windows et l’installateur.</p>
-        <img class="logo-preview" src="/logo.svg" alt="Aperçu du logo AutoGestion Pro">
+        <img class="logo-preview" src="/logo.svg" alt="Aperçu du logo N.O.B BUSINESS">
         <p class="meta" id="logo-assets"></p>
         <p class="state" id="logo-state"></p>
         <button type="button" data-task="logo">Marquer comme vérifié</button>

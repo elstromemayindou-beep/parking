@@ -152,8 +152,8 @@ const stopInstance = async instanceId => {
 
 const canvas = createCanvas({
   id: canvasId,
-  displayName: 'AutoGestion Pro — suivi projet',
-  description: 'Consultez et cochez les contrôles du profil, des tarifs, du logo et des releases Windows AutoGestion Pro.',
+  displayName: 'N.O.B BUSINESS — suivi projet',
+  description: 'Consultez et cochez les contrôles du profil, des tarifs, du logo et des releases Windows N.O.B BUSINESS.',
   actions: [
     {
       name: 'getProjectReleaseStatus',
@@ -193,4 +193,4 @@ const canvas = createCanvas({
 });
 
 const session = await joinSession({ canvases: [canvas] });
-session.log('AutoGestion Pro project canvas connected.');
+session.log('N.O.B BUSINESS project canvas connected.');

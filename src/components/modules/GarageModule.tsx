@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Module 3: Garage & Mécanique / Atelier
+ * N.O.B BUSINESS - Module 3: Garage & Mécanique / Atelier
  * Requirements:
  * - RF-13 : Ordre de Réparation (OR) avec diagnostic et photos des dommages
  * - RF-15 : Devis détaillé (pièces + main-d'œuvre) soumis à validation gérant

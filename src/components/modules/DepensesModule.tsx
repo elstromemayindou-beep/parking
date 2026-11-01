@@ -1,8 +1,8 @@
 /**
- * AutoGestion Pro v3.0 - Module 7: Dépenses & Petite Caisse
+ * N.O.B BUSINESS - Module 7: Dépenses & Petite Caisse
  * Requirements:
  * - RF-51 : Saisie des dépenses de fonctionnement avec motif, catégorie et reçu photographié
- * - Double niveau de validation : Gérant < 50 000 F, Accord Direction Propriétaire > 50 000 F
+ * - Le gérant autorise les décaissements avant leur imputation à la caisse
  * - Déduction directe du Solde Net de caisse (RF-43)
  */
 
@@ -30,9 +30,9 @@ export const DepensesModule: React.FC = () => {
     userRole,
     ajouterDepense,
     validerDepenseGerant,
-    validerDepenseProprietaire,
     formatCurrency,
-    showNotification
+    showNotification,
+    departementActif
   } = useApp();
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,15 +40,21 @@ export const DepensesModule: React.FC = () => {
   const [montant, setMontant] = useState<number>(15000);
   const [categorie, setCategorie] = useState<Depense['categorie']>('Carburant');
   const [justificatif, setJustificatif] = useState('');
+  const [departementDepense, setDepartementDepense] = useState<Depense['departement'] | 'GLOBAL'>('LAVAGE');
 
   const categories: { label: Depense['categorie']; icon: any }[] = [
     { label: 'Carburant', icon: Fuel },
+    { label: 'Carburant groupe électrogène', icon: Fuel },
+    { label: 'Électricité & Groupe électrogène', icon: Building },
     { label: 'Consommables & Pièces', icon: Wrench },
     { label: 'Équipements & Outils', icon: Wrench },
     { label: 'Alimentation & Eau', icon: Coffee },
     { label: 'Loyer & Électricité', icon: Building },
-    { label: 'Petite Caisse / Imprévus', icon: DollarSign }
+    { label: 'Petite Caisse / Imprévus', icon: DollarSign },
+    { label: 'Dépannage groupe électrogène', icon: Wrench },
+    { label: 'Salaires & commissions', icon: DollarSign }
   ];
+  const depensesVisibles = depenses.filter(expense => departementActif === 'GLOBAL' || expense.departement === departementActif);
 
   const handleCreateExpense = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +67,8 @@ export const DepensesModule: React.FC = () => {
       motif.trim(),
       Number(montant),
       categorie,
-      justificatif.trim() || undefined
+      justificatif.trim() || undefined,
+      departementActif === 'GLOBAL' ? departementDepense : departementActif
     );
 
     setModalOpen(false);
@@ -69,11 +76,11 @@ export const DepensesModule: React.FC = () => {
     setJustificatif('');
   };
 
-  const totalDepenses = depenses
+  const totalDepenses = depensesVisibles
     .filter(d => d.valide_par_gerant && (!d.accord_proprietaire_requis || d.valide_par_proprietaire))
     .reduce((sum, d) => sum + d.montant, 0);
 
-  const enAttenteDirection = depenses.filter(d => d.accord_proprietaire_requis && !d.valide_par_proprietaire);
+  const enAttenteDirection = depensesVisibles.filter(d => !d.valide_par_gerant);
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -88,7 +95,7 @@ export const DepensesModule: React.FC = () => {
             Contrôle des Sorties de Caisse & Achats Urgents
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Validation duale (Gérant &lt; 50k / Accord Propriétaire &gt; 50k) et pièces justificatives (RF-51).
+            Les dépenses restent en attente jusqu’à leur autorisation par le gérant.
           </p>
         </div>
 
@@ -100,8 +107,16 @@ export const DepensesModule: React.FC = () => {
           <span>+ Saisie Sortie de Caisse</span>
         </button>
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
+        <p className="text-xs text-slate-400">
+          {departementActif === 'GLOBAL'
+            ? 'Vue globale : consultez les dépenses de toutes les activités. Choisissez une activité lors de l’enregistrement d’une dépense.'
+            : `Vue ${departementActif} : seules les dépenses de cette activité sont affichées.`}
+          {' '}Les dépenses du groupe électrogène peuvent être classées en carburant, électricité ou dépannage.
+        </p>
+      </div>
 
-      {/* Warning banner for pending owner approval */}
+      {/* Warning banner for pending manager approval */}
       {enAttenteDirection.length > 0 && (
         <div className="bg-amber-950/40 border border-amber-500/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
           <div className="flex items-center gap-3">
@@ -110,20 +125,20 @@ export const DepensesModule: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm font-extrabold text-white">
-                {enAttenteDirection.length} dépense(s) supérieure(s) à 50 000 FCFA en attente d'accord Propriétaire !
+                {enAttenteDirection.length} décaissement(s) en attente d’autorisation du gérant.
               </h3>
               <p className="text-xs text-amber-200 mt-0.5">
-                Règle de gouvernance : Toute dépense lourde requiert la signature de la Direction avant imputation finale.
+                Les décaissements en attente ne sont pas déduits de la caisse tant que le gérant ne les a pas autorisés.
               </p>
             </div>
           </div>
-          {userRole === 'PROPRIETAIRE' ? (
+          {userRole === 'GERANT' ? (
             <span className="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-3 py-1 rounded-lg border border-emerald-600/40">
-              Connecté en tant que Propriétaire : Vous pouvez valider ci-dessous
+              Connecté en tant que gérant : vous pouvez autoriser ci-dessous
             </span>
           ) : (
             <span className="text-xs font-medium text-amber-300">
-              Basculez sur le profil Propriétaire pour approuver
+              Seul le gérant peut autoriser le décaissement
             </span>
           )}
         </div>
@@ -148,7 +163,7 @@ export const DepensesModule: React.FC = () => {
             Nombre de Pièces Justificatives
           </span>
           <span className="text-2xl font-black text-white font-mono">
-            {depenses.length} reçus
+            {depensesVisibles.length} reçus
           </span>
           <span className="text-[11px] text-slate-500 block mt-1">
             Carburant groupe, fournitures atelier
@@ -157,13 +172,13 @@ export const DepensesModule: React.FC = () => {
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
-            En Attente Approbation Propriétaire
+            En attente d’autorisation du gérant
           </span>
           <span className="text-2xl font-black text-amber-400 font-mono">
             {enAttenteDirection.length} dossier(s)
           </span>
           <span className="text-[11px] text-slate-500 block mt-1">
-            Seuil strict &gt; 50 000 FCFA
+            Autorisation du gérant requise
           </span>
         </div>
       </div>
@@ -191,8 +206,8 @@ export const DepensesModule: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-medium">
-              {depenses.map(d => {
-                const isPendingOwner = d.accord_proprietaire_requis && !d.valide_par_proprietaire;
+              {depensesVisibles.map(d => {
+                const isPendingManager = !d.valide_par_gerant;
 
                 return (
                   <tr key={d.id} className="hover:bg-slate-800/40 transition">
@@ -215,9 +230,9 @@ export const DepensesModule: React.FC = () => {
                       -{formatCurrency(d.montant)}
                     </td>
                     <td className="py-3 px-4 text-center">
-                      {isPendingOwner ? (
+                      {isPendingManager ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                          Attente Propriétaire (&gt;50k)
+                          En attente du gérant
                         </span>
                       ) : (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
@@ -226,13 +241,13 @@ export const DepensesModule: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {isPendingOwner && (
+                      {isPendingManager && userRole === 'GERANT' && (
                         <button
-                          onClick={() => validerDepenseProprietaire(d.id)}
+                          onClick={() => validerDepenseGerant(d.id)}
                           className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-[11px] transition cursor-pointer shadow-sm"
-                          title="Autoriser la sortie de caisse en tant que Direction"
+                          title="Autoriser le décaissement en tant que gérant"
                         >
-                          Accorder (Propriétaire)
+                          Autoriser (Gérant)
                         </button>
                       )}
                     </td>
@@ -277,6 +292,18 @@ export const DepensesModule: React.FC = () => {
                 </select>
               </div>
 
+              {departementActif === 'GLOBAL' ? (
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Activité concernée</label>
+                  <select value={departementDepense} onChange={event => setDepartementDepense(event.target.value as Depense['departement'] | 'GLOBAL')} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-white">
+                    <option value="GLOBAL">Dépense générale</option>
+                    <option value="LAVAGE">Lavage</option><option value="SALON">Salon</option><option value="MECANIQUE">Garage / mécanique</option><option value="PARKING">Parking / gardiennage</option>
+                  </select>
+                </div>
+              ) : (
+                <p className="rounded-lg bg-blue-950/40 p-2 text-xs text-blue-200">Cette dépense sera rattachée à l’activité {departementActif}.</p>
+              )}
+
               <div>
                 <label className="text-xs font-bold text-slate-300 block mb-1">
                   Motif détaillé de la dépense *
@@ -302,12 +329,6 @@ export const DepensesModule: React.FC = () => {
                   onChange={(e) => setMontant(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl font-mono text-sm font-bold text-white focus:outline-none"
                 />
-                {montant > 50000 && (
-                  <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1 font-semibold">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    Montant &gt; 50 000 FCFA : Accord préalable du Propriétaire requis !
-                  </p>
-                )}
               </div>
 
               <div>

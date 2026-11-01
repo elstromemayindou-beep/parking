@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Type Definitions
+ * N.O.B BUSINESS - Type Definitions
  * Based on AGP-SPEC-2026-V3 Specification & PostgreSQL Schema
  */
 
@@ -11,6 +11,29 @@ export type UserRole =
   | 'LAVEUR'
   | 'AGENT_PARKING'
   | 'CAISSIER';
+
+export type DepartementActivite = 'LAVAGE' | 'SALON' | 'MECANIQUE' | 'PARKING';
+export type PeriodeTravail = 'JOUR' | 'NUIT';
+
+export interface ServiceLavage {
+  id: string;
+  nom: string;
+  prix_par_categorie: Record<string, number>;
+  actif: boolean;
+}
+
+export interface ConfigurationEntreprise {
+  nom: string;
+  adresse: string;
+  telephonePdgWhatsapp: string;
+  debutJour: string;
+  finJour: string;
+  debutNuit: string;
+  finNuit: string;
+  tarifGardiennageNuit: number;
+  categoriesVehicules: string[];
+  servicesLavage: ServiceLavage[];
+}
 
 export interface Succursale {
   id: number;
@@ -27,7 +50,7 @@ export interface Employe {
   succursale_id: number;
   nom_complet: string;
   telephone: string;
-  poste: 'Mécanicien' | 'Laveur' | 'Agent Parking' | 'Caissier' | 'Chef d\'Atelier' | 'Réceptionniste' | 'Gérant';
+  poste: 'Mécanicien' | 'Laveur' | 'Coiffeur' | 'Agent Parking' | 'Gardien' | 'Caissier' | 'Chef d\'Atelier' | 'Réceptionniste' | 'Gérant';
   salaire_base: number;
   statut: 'ACTIF' | 'SUSPENDU' | 'RADIE';
   date_embauche: string;
@@ -47,6 +70,9 @@ export interface Employe {
   date_radiation?: string;
   motif_radiation?: string;
   salaire_prorata_radiation?: number;
+  departement?: DepartementActivite;
+  periode_travail?: PeriodeTravail;
+  rythme_paie?: '1_15' | 'AVANCE_25_FIN_MOIS';
 }
 
 export interface PrimeAmende {
@@ -59,7 +85,10 @@ export interface PrimeAmende {
   enregistre_par: string;
   preuve_url?: string;
   lavage_id?: number;
+  facture_id?: number;
   annulee?: boolean;
+  departement?: DepartementActivite;
+  periode_travail?: PeriodeTravail;
 }
 
 export interface Client {
@@ -82,6 +111,7 @@ export interface Vehicule {
   type_vehicule?: 'VOITURE' | 'MOTO';
   couleur?: string;
   kilometrage?: number;
+  categorie_vehicule?: string;
 }
 
 export type PaymentMethod = 'ESPECES' | 'MTN_MOMO' | 'AIRTEL_MONEY' | 'VIREMENT';
@@ -89,9 +119,9 @@ export type PaymentMethod = 'ESPECES' | 'MTN_MOMO' | 'AIRTEL_MONEY' | 'VIREMENT'
 export interface Facture {
   id: number;
   numero: string;
-  client_id: number;
+  client_id?: number;
   succursale_id: number;
-  type_service: 'PARKING' | 'LAVAGE' | 'GARAGE' | 'VENTE_PIECE';
+  type_service: 'PARKING' | 'LAVAGE' | 'GARAGE' | 'VENTE_PIECE' | 'SALON';
   description: string;
   montant_total: number;
   montant_paye: number;
@@ -105,6 +135,9 @@ export interface Facture {
   annulee_le?: string;
   source_lavage_id?: number;
   source_ticket_parking_id?: number;
+  salon_date_recette?: string;
+  departement?: DepartementActivite;
+  periode_travail?: PeriodeTravail;
 }
 
 export interface Encaissement {
@@ -116,6 +149,8 @@ export interface Encaissement {
   reference_paiement: string;
   created_at: string;
   motif?: string;
+  departement?: DepartementActivite;
+  periode_travail?: PeriodeTravail;
 }
 
 export interface Depense {
@@ -123,13 +158,18 @@ export interface Depense {
   succursale_id: number;
   motif: string;
   montant: number;
-  categorie: 'Carburant' | 'Consommables & Pièces' | 'Équipements & Outils' | 'Alimentation & Eau' | 'Loyer & Électricité' | 'Petite Caisse / Imprévus';
+  categorie: 'Carburant' | 'Carburant groupe électrogène' | 'Électricité & Groupe électrogène' | 'Consommables & Pièces' | 'Équipements & Outils' | 'Alimentation & Eau' | 'Loyer & Électricité' | 'Petite Caisse / Imprévus' | 'Salaires & commissions' | 'Dépannage groupe électrogène';
   justificatif_url?: string;
   valide_par_gerant: boolean;
   accord_proprietaire_requis: boolean;
   valide_par_proprietaire: boolean;
   auteur: string;
   created_at: string;
+  departement?: DepartementActivite;
+  periode_travail?: PeriodeTravail;
+  employe_id?: number;
+  type_paie?: 'PAIEMENT' | 'AVANCE_25' | 'SOLDE' | 'PREMIERE_QUINZAINE' | 'SECONDE_QUINZAINE';
+  periode_paie?: string;
 }
 
 // 1. Parking
@@ -169,6 +209,11 @@ export interface TicketParking {
   tarif_quart_heure_supplementaire?: number;
   motif_arret?: string;
   arrete_sans_encaissement?: boolean;
+  departement?: DepartementActivite;
+  periode_travail?: PeriodeTravail;
+  service_gardiennage?: boolean;
+  montant_gardiennage?: number;
+  categorie_vehicule?: string;
 }
 
 export interface TarifsServices {
@@ -204,7 +249,7 @@ export interface LavageItem {
   client_nom: string;
   client_id?: number;
   client_telephone: string;
-  formule: 'SIMPLE' | 'COMPLET' | 'VIP_DETAILING';
+  formule: 'SIMPLE' | 'COMPLET' | 'VIP_DETAILING' | 'PERSONNALISE';
   prix: number;
   laveur_id?: number;
   laveur_ids?: number[];
@@ -226,6 +271,11 @@ export interface LavageItem {
   instructions_client?: string;
   etape_domicile?: EtapeLavageDomicile;
   kit_prepare?: string[];
+  departement?: DepartementActivite;
+  periode_travail?: PeriodeTravail;
+  services_selectionnes?: { service_id: string; nom: string; montant: number }[];
+  remise_montant?: number;
+  categorie_vehicule?: string;
 }
 
 export interface DemandeConsommableLavage {
@@ -268,6 +318,8 @@ export interface OrdreReparation {
   date_entree: string;
   date_livraison_prevue: string;
   photos_dommages?: string[];
+  departement?: DepartementActivite;
+  periode_travail?: PeriodeTravail;
 }
 
 // 6. Stocks
@@ -276,13 +328,14 @@ export interface PieceStock {
   succursale_id: number;
   reference: string;
   nom: string;
-  categorie: 'Filtres & Vidange' | 'Freinage' | 'Suspension' | 'Pneumatiques' | 'Électricité & Batterie' | 'Consommables Lavage';
+  categorie: 'Filtres & Vidange' | 'Freinage' | 'Suspension' | 'Pneumatiques' | 'Électricité & Batterie' | 'Consommables Lavage' | 'Salon & Coiffure';
   quantite_disponible: number;
   seuil_alerte: number;
   prix_achat: number;
   prix_vente: number;
   fournisseur: string;
   emplacement: string;
+  departement?: DepartementActivite;
 }
 
 export interface MouvementStock {
@@ -298,6 +351,7 @@ export interface MouvementStock {
   responsable: string;
   reference_operation?: string;
   created_at: string;
+  departement?: DepartementActivite;
 }
 
 export interface TransfertStock {
@@ -376,6 +430,7 @@ export type ActiveModule =
   | 'HUB'
   | 'PARKING'
   | 'LAVAGE'
+  | 'SALON'
   | 'GARAGE'
   | 'CAISSE'
   | 'EMPLOYES'

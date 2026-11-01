@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Widget Alertes Stocks Critiques & Ruptures
+ * N.O.B BUSINESS - Widget Alertes Stocks Critiques & Ruptures
  * Requirements:
  * - RF-68 : Suivi des stocks pièces/produits, alertes de seuil critique et bon de commande
  * - Surveillance en temps réel des ruptures (0 unité) et stocks sous le seuil d'alerte minimal
@@ -23,7 +23,11 @@ import {
 } from 'lucide-react';
 
 export const StockCriticalAlertsWidget: React.FC = () => {
-  const { piecesStock, commanderStock, setActiveModule, formatCurrency, showNotification } = useApp();
+  const { piecesStock, commanderStock, setActiveModule, setDepartementActif, formatCurrency, showNotification } = useApp();
+  const openGlobalStock = () => {
+    setDepartementActif('GLOBAL');
+    setActiveModule('STOCKS');
+  };
   const [orderingPiece, setOrderingPiece] = useState<PieceStock | null>(null);
   const [orderQty, setOrderQty] = useState<number>(10);
 
@@ -73,7 +77,7 @@ export const StockCriticalAlertsWidget: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setActiveModule('STOCKS')}
+          onClick={openGlobalStock}
           className="glass-button flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold text-blue-900"
         >
           <Boxes className="h-3.5 w-3.5 text-blue-700" />
@@ -125,7 +129,7 @@ export const StockCriticalAlertsWidget: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveModule('STOCKS')}
+            onClick={openGlobalStock}
             className="px-3 py-1.5 rounded-xl bg-blue-950 hover:bg-blue-900 text-white border border-blue-600/50 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
           >
             <span>Module Stocks</span>

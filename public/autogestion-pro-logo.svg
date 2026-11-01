@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
-  <title id="title">AutoGestion Pro</title>
+  <title id="title">N.O.B BUSINESS</title>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#2563eb"/>
@@ -7,8 +7,7 @@
     </linearGradient>
   </defs>
   <rect width="256" height="256" rx="56" fill="url(#background)"/>
-  <path d="M92 48h53c35 0 58 20 58 52s-23 53-58 53h-23v55H92V48zm30 26v57h22c18 0 29-10 29-29s-11-28-29-28h-22z" fill="#fff"/>
-  <path d="M48 174h55l13 17h45l12-17h35l-10 37H58l-10-37z" fill="#bfdbfe"/>
-  <circle cx="87" cy="208" r="13" fill="#1e3a8a" stroke="#fff" stroke-width="7"/>
-  <circle cx="176" cy="208" r="13" fill="#1e3a8a" stroke="#fff" stroke-width="7"/>
+  <text x="128" y="139" fill="#fff" font-family="Arial, sans-serif" font-size="61" font-weight="800" text-anchor="middle">N.O.B</text>
+  <path d="M57 165h142v7H57z" fill="#bfdbfe"/>
+  <text x="128" y="205" fill="#bfdbfe" font-family="Arial, sans-serif" font-size="25" font-weight="700" letter-spacing="2" text-anchor="middle">BUSINESS</text>
 </svg>

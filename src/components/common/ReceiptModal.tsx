@@ -85,6 +85,12 @@ export const ReceiptModal: React.FC = () => {
                 <span className="text-slate-600">Tarif Catégorie :</span>
                 <span>{data.type_client}</span>
               </div>
+              {data.service_gardiennage && (
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Gardiennage de nuit :</span>
+                  <span>{formatCurrency(data.montant_gardiennage || 0)}</span>
+                </div>
+              )}
               {data.montant_final !== undefined && (
                 <div className="flex justify-between pt-2 border-t border-dashed border-slate-300 font-black text-sm">
                   <span>MONTANT PAYÉ :</span>
@@ -109,14 +115,32 @@ export const ReceiptModal: React.FC = () => {
                 <span className="text-slate-600">Véhicule :</span>
                 <span className="font-black">{data.type_vehicule === 'MOTO' ? 'Moto · ' : 'Voiture · '}{data.plaque}</span>
               </div>
+              {data.categorie_vehicule && (
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Catégorie :</span>
+                  <span>{data.categorie_vehicule}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-600">Client :</span>
                 <span>{data.client_nom}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">Formule :</span>
-                <span className="font-bold">{data.formule}</span>
+                <span className="font-bold">{data.formule === 'PERSONNALISE' ? 'Prestations à la carte' : data.formule}</span>
               </div>
+              {data.services_selectionnes?.map((service: { service_id: string; nom: string; montant: number }) => (
+                <div key={service.service_id} className="flex justify-between gap-3 text-[10px]">
+                  <span className="text-slate-600">{service.nom}</span>
+                  <span>{formatCurrency(service.montant)}</span>
+                </div>
+              ))}
+              {data.remise_montant > 0 && (
+                <div className="flex justify-between text-amber-700">
+                  <span>Prix négocié</span>
+                  <span>−{formatCurrency(data.remise_montant)}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t border-dashed border-slate-300 font-black text-sm">
                 <span>TOTAL ENCAISSÉ :</span>
                 <span>{formatCurrency(data.prix)}</span>

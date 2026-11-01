@@ -1,5 +1,5 @@
 /**
- * AutoGestion Pro v3.0 - Financial Report PDF Export & Print Engine
+ * N.O.B BUSINESS - Financial report PDF export and print engine
  * Requirements:
  * - RF-80 : Journaux d'achats, ventes, caisse et banques
  * - Synthèse de gestion et impression des états
@@ -21,12 +21,16 @@ interface FinancialReportPdfModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialReportType?: 'SYSCOHADA' | 'DAILY_JOURNAL' | 'CASH_CLOSING' | 'AUDIT_SECURITY';
+  startDate?: string;
+  endDate?: string;
 }
 
 export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = ({
   isOpen,
   onClose,
-  initialReportType = 'SYSCOHADA'
+  initialReportType = 'SYSCOHADA',
+  startDate,
+  endDate
 }) => {
   const {
     currentSuccursale,
@@ -36,7 +40,8 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
     depenses,
     alertesFraude,
     formatCurrency,
-    showNotification
+    showNotification,
+    departementActif
   } = useApp();
 
   const [reportType, setReportType] = useState<'SYSCOHADA' | 'DAILY_JOURNAL' | 'CASH_CLOSING' | 'AUDIT_SECURITY'>(initialReportType);
@@ -47,16 +52,30 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
   if (!isOpen) return null;
 
   // Financial aggregates
-  const encaissementsSession = encaissements.filter(
-    payment => payment.created_at.slice(0, 10) === sessionCaisse.date
+  const reportStart = startDate || sessionCaisse.date;
+  const reportEnd = endDate || sessionCaisse.date;
+  const inPeriod = (date: string) => date.slice(0, 10) >= reportStart && date.slice(0, 10) <= reportEnd;
+  const departmentOfInvoice = (invoice: (typeof factures)[number] | undefined) => invoice?.departement || (
+    invoice?.type_service === 'LAVAGE' ? 'LAVAGE'
+      : invoice?.type_service === 'SALON' ? 'SALON'
+        : invoice?.type_service === 'PARKING' ? 'PARKING'
+          : invoice?.type_service === 'GARAGE' || invoice?.type_service === 'VENTE_PIECE' ? 'MECANIQUE'
+            : undefined
   );
+  const encaissementsSession = encaissements.filter(payment => {
+    if (!inPeriod(payment.created_at)) return false;
+    if (departementActif === 'GLOBAL') return true;
+    const invoice = factures.find(item => item.id === payment.facture_id);
+    return (payment.departement || departmentOfInvoice(invoice)) === departementActif;
+  });
   const chiffreAffaires = encaissementsSession.reduce((sum, payment) => sum + payment.montant, 0);
   const encaissementsVirement = encaissementsSession
     .filter(payment => payment.mode_paiement === 'VIREMENT')
     .reduce((sum, payment) => sum + payment.montant, 0);
 
   const depensesValidees = depenses.filter(
-    d => d.created_at.slice(0, 10) === sessionCaisse.date &&
+    d => inPeriod(d.created_at) &&
+      (departementActif === 'GLOBAL' || d.departement === departementActif) &&
       d.valide_par_gerant &&
       (!d.accord_proprietaire_requis || d.valide_par_proprietaire)
   );
@@ -65,7 +84,7 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
 
   const soldeActivite = chiffreAffaires - chargesExploitation;
 
-  const recettesParService = (type: 'GARAGE' | 'LAVAGE' | 'PARKING' | 'VENTE_PIECE') =>
+  const recettesParService = (type: 'GARAGE' | 'LAVAGE' | 'PARKING' | 'VENTE_PIECE' | 'SALON') =>
     encaissementsSession
       .filter(payment => factures.find(facture => facture.id === payment.facture_id)?.type_service === type)
       .reduce((sum, payment) => sum + payment.montant, 0);
@@ -73,12 +92,35 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
   const caLavage = recettesParService('LAVAGE');
   const caParking = recettesParService('PARKING');
   const caPieces = recettesParService('VENTE_PIECE');
-  const autresRecettes = chiffreAffaires - caGarage - caLavage - caParking - caPieces;
+  const caSalon = recettesParService('SALON');
+  const autresRecettes = chiffreAffaires - caGarage - caLavage - caParking - caPieces - caSalon;
+  const departmentLabels: Record<typeof departementActif, string> = {
+    GLOBAL: 'Toutes les activités',
+    LAVAGE: 'Lavage',
+    SALON: 'Salon de coiffure',
+    MECANIQUE: 'Garage / mécanique',
+    PARKING: 'Parking et gardiennage'
+  };
+  const reportRevenueRows = departementActif === 'GLOBAL'
+    ? [
+        { label: 'Garage', amount: caGarage },
+        { label: 'Lavage', amount: caLavage },
+        { label: 'Parking', amount: caParking },
+        { label: 'Salon de coiffure', amount: caSalon },
+        { label: 'Vente de pièces', amount: caPieces },
+        { label: 'Autres ou prestation indisponible', amount: autresRecettes }
+      ]
+    : departementActif === 'MECANIQUE'
+      ? [
+          { label: 'Garage et réparations', amount: caGarage },
+          { label: 'Vente de pièces', amount: caPieces }
+        ]
+      : [{ label: departmentLabels[departementActif], amount: chiffreAffaires }];
   const depensesAchats = depensesValidees
     .filter(d => ['Consommables & Pièces', 'Équipements & Outils'].includes(d.categorie))
     .reduce((sum, d) => sum + d.montant, 0);
   const depensesEnergie = depensesValidees
-    .filter(d => ['Carburant', 'Loyer & Électricité'].includes(d.categorie))
+    .filter(d => ['Carburant', 'Carburant groupe électrogène', 'Électricité & Groupe électrogène', 'Dépannage groupe électrogène', 'Loyer & Électricité'].includes(d.categorie))
     .reduce((sum, d) => sum + d.montant, 0);
   const autresDepenses = chargesExploitation - depensesAchats - depensesEnergie;
 
@@ -88,7 +130,7 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
 
   const handleSendEmail = (e: React.FormEvent) => {
     e.preventDefault();
-    const body = `Synthèse de gestion - ${currentSuccursale.nom}\nDate de session : ${sessionCaisse.date}\nEncaissements enregistrés : ${formatCurrency(chiffreAffaires)}\nDépenses validées : ${formatCurrency(chargesExploitation)}\nDifférence : ${formatCurrency(soldeActivite)}\n\nImprimez la synthèse depuis l'application si vous souhaitez la joindre.`;
+    const body = `Rapport de gestion - N.O.B BUSINESS - ${currentSuccursale.nom}\nPériode : ${reportStart} → ${reportEnd}\nActivité : ${departmentLabels[departementActif]}\nEncaissements enregistrés : ${formatCurrency(chiffreAffaires)}\nDépenses validées : ${formatCurrency(chargesExploitation)}\nDifférence : ${formatCurrency(soldeActivite)}\n\nImprimez le rapport depuis l'application si vous souhaitez le joindre.`;
     const mailto = `mailto:${recipientEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
     window.location.href = mailto;
     setEmailModalOpen(false);
@@ -96,7 +138,7 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
   };
 
   const handleCopyWhatsApp = async () => {
-    const summary = `SYNTHÈSE DE GESTION - AUTOGESTION PRO\nSuccursale : ${currentSuccursale.nom}\nDate : ${sessionCaisse.date}\nEncaissements enregistrés : ${formatCurrency(chiffreAffaires)}\nDépenses validées : ${formatCurrency(chargesExploitation)}\nDifférence : ${formatCurrency(soldeActivite)}\n\nDocument imprimable depuis l'application.`;
+    const summary = `RAPPORT DE GESTION - N.O.B BUSINESS\nSuccursale : ${currentSuccursale.nom}\nPériode : ${reportStart} → ${reportEnd}\nActivité : ${departmentLabels[departementActif]}\nEncaissements enregistrés : ${formatCurrency(chiffreAffaires)}\nDépenses validées : ${formatCurrency(chargesExploitation)}\nDifférence : ${formatCurrency(soldeActivite)}\n\nDocument imprimable depuis l'application.`;
     try {
       await navigator.clipboard.writeText(summary);
       showNotification('Résumé copié. Vous pouvez le coller dans votre messagerie.');
@@ -218,7 +260,7 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
               <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4 mb-6">
                 <div>
                   <h1 className="text-xl font-black tracking-tight text-slate-950 flex items-center gap-2">
-                    AUTOGESTION PRO v3.0
+                    N.O.B BUSINESS
                   </h1>
                   <p className="text-[11px] font-bold text-slate-700 mt-0.5">
                     Synthèse de gestion
@@ -234,7 +276,7 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
                 <div className="text-right font-mono text-[10px] space-y-1">
                   <div className="bg-slate-100 p-2 rounded-lg border border-slate-300">
                     <span className="font-bold text-slate-800 block text-[11px]">APERÇU DE GESTION</span>
-                    <span className="text-slate-600 block">Date de session : {sessionCaisse.date}</span>
+                    <span className="text-slate-600 block">Période : {reportStart} → {reportEnd} · {departmentLabels[departementActif]}</span>
                     <span className="text-slate-500 block">Généré le : {new Date().toLocaleString('fr-FR')}</span>
                   </div>
                 </div>
@@ -243,9 +285,11 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
               {/* Title of Document */}
               <div className="bg-slate-100 text-center py-2.5 px-4 rounded-lg border border-slate-300 mb-6">
                 <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">
-                  {reportType === 'SYSCOHADA' && 'RÉCAPITULATIF DES ENCAISSEMENTS ET DÉPENSES'}
+                  {reportType === 'SYSCOHADA' && (departementActif === 'GLOBAL'
+                    ? 'RÉCAPITULATIF GLOBAL DES ENCAISSEMENTS ET DÉPENSES'
+                    : `RAPPORT FINANCIER · ${departmentLabels[departementActif].toLocaleUpperCase()}`)}
                   {reportType === 'CASH_CLOSING' && `ÉTAT DE SESSION DE CAISSE DU ${sessionCaisse.date}`}
-                  {reportType === 'DAILY_JOURNAL' && `JOURNAL DES ENCAISSEMENTS DU ${sessionCaisse.date}`}
+                  {reportType === 'DAILY_JOURNAL' && `JOURNAL DES ENCAISSEMENTS DU ${reportStart} AU ${reportEnd}`}
                   {reportType === 'AUDIT_SECURITY' && 'JOURNAL DES ALERTES DE CONTRÔLE'}
                 </h2>
                 <div className="text-[10px] text-slate-600 mt-0.5 font-medium">
@@ -289,31 +333,15 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
                           {formatCurrency(chiffreAffaires)}
                         </td>
                       </tr>
-                      <tr>
-                        <td className="border border-slate-300 p-1.5 pl-6 text-slate-700">Garage</td>
-                        <td className="border border-slate-300 p-1.5 text-center font-mono text-slate-500">Service</td>
-                        <td className="border border-slate-300 p-1.5 text-right font-mono">{formatCurrency(caGarage)}</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-slate-300 p-1.5 pl-6 text-slate-700">Lavage</td>
-                        <td className="border border-slate-300 p-1.5 text-center font-mono text-slate-500">Service</td>
-                        <td className="border border-slate-300 p-1.5 text-right font-mono">{formatCurrency(caLavage)}</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-slate-300 p-1.5 pl-6 text-slate-700">Parking</td>
-                        <td className="border border-slate-300 p-1.5 text-center font-mono text-slate-500">Service</td>
-                        <td className="border border-slate-300 p-1.5 text-right font-mono">{formatCurrency(caParking)}</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-slate-300 p-1.5 pl-6 text-slate-700">Vente de pièces</td>
-                        <td className="border border-slate-300 p-1.5 text-center font-mono text-slate-500">Service</td>
-                        <td className="border border-slate-300 p-1.5 text-right font-mono">{formatCurrency(caPieces)}</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-slate-300 p-1.5 pl-6 text-slate-700">Autres ou prestation indisponible</td>
-                        <td className="border border-slate-300 p-1.5 text-center font-mono text-slate-500">Service</td>
-                        <td className="border border-slate-300 p-1.5 text-right font-mono">{formatCurrency(autresRecettes)}</td>
-                      </tr>
+                      {reportRevenueRows.map(row => (
+                        <tr key={row.label}>
+                          <td className="border border-slate-300 p-1.5 pl-6 text-slate-700">{row.label}</td>
+                          <td className="border border-slate-300 p-1.5 text-center font-mono text-slate-500">
+                            {departementActif === 'GLOBAL' ? 'Activité' : 'Période'}
+                          </td>
+                          <td className="border border-slate-300 p-1.5 text-right font-mono">{formatCurrency(row.amount)}</td>
+                        </tr>
+                      ))}
 
                       <tr className="bg-slate-100 font-bold">
                         <td className="border border-slate-300 p-2 text-slate-900" colSpan={2}>
@@ -516,7 +544,7 @@ export const FinancialReportPdfModal: React.FC<FinancialReportPdfModalProps> = (
 
             {/* Document Footer */}
             <div className="mt-8 pt-3 border-t border-slate-300 text-center text-[9px] text-slate-500 flex items-center justify-between font-mono">
-              <span>AutoGestion Pro v3.0 • Système Intégré de Gestion Automobile</span>
+              <span>N.O.B BUSINESS • Système intégré de gestion</span>
               <span>Page 1 / 1 • Format ISO 216 A4</span>
               <span>Aperçu non certifié · Vérifier les écritures avant usage comptable</span>
             </div>
